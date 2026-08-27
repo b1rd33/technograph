@@ -9,11 +9,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/b1rd33/technograph/internal/app"
 	"github.com/b1rd33/technograph/internal/buildinfo"
-	"github.com/b1rd33/technograph/internal/fingerprint"
 	"github.com/b1rd33/technograph/internal/output"
-	"github.com/b1rd33/technograph/internal/probe"
-	"github.com/b1rd33/technograph/internal/scanner"
 )
 
 // Run executes the CLI and returns a process exit code.
@@ -66,34 +64,28 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, bundledFi
 		}
 		strict = false
 	}
-	database, warnings, err := fingerprint.Load(fingerprintData, strict)
-	if err != nil {
-		fmt.Fprintf(stderr, "technograph: %v\n", err)
-		return 1
-	}
-	for _, warning := range warnings {
-		fmt.Fprintf(stderr, "technograph: warning: %v\n", warning)
-	}
-
 	level := slog.LevelWarn
 	if *verbose {
 		level = slog.LevelDebug
 	}
 	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: level}))
-	httpProbe := probe.NewHTTPProbe(probe.HTTPOptions{Timeout: *httpTimeout, InsecureTLS: *insecure, Logger: logger})
-	defer httpProbe.CloseIdleConnections()
-	dnsProbe, err := probe.NewSystemDNSProbe(*dnsTimeout, logger)
+	service, warnings, err := app.New(app.Options{
+		FingerprintData: fingerprintData, StrictFingerprints: strict,
+		Concurrency: *concurrency, HTTPTimeout: *httpTimeout, DNSTimeout: *dnsTimeout,
+		DomainTimeout: max(*httpTimeout, *dnsTimeout) + time.Second,
+		InsecureTLS:   *insecure, Logger: logger,
+	})
 	if err != nil {
 		fmt.Fprintf(stderr, "technograph: %v\n", err)
 		return 1
 	}
+	defer service.Close()
+	for _, warning := range warnings {
+		fmt.Fprintf(stderr, "technograph: warning: %v\n", warning)
+	}
 
 	started := time.Now()
-	domainTimeout := max(*httpTimeout, *dnsTimeout) + time.Second
-	results := (scanner.Scanner{
-		HTTP: httpProbe, DNS: dnsProbe, Engine: fingerprint.NewEngine(database),
-		Concurrency: *concurrency, Timeout: domainTimeout,
-	}).Scan(ctx, domains)
+	results := service.Scan(ctx, domains)
 	required, err := output.RequiredJSON(results)
 	if err != nil {
 		fmt.Fprintf(stderr, "technograph: encode output: %v\n", err)

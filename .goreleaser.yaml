@@ -30,11 +30,31 @@ builds:
         -X github.com/b1rd33/technograph/internal/buildinfo.Version={{ .Version }}
         -X github.com/b1rd33/technograph/internal/buildinfo.Commit={{ .ShortCommit }}
         -X github.com/b1rd33/technograph/internal/buildinfo.Date={{ .Date }}
+  - id: technograph-mcp
+    main: ./cmd/technograph-mcp
+    binary: technograph-mcp
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - >-
+        -s -w
+        -X github.com/b1rd33/technograph/internal/buildinfo.Version={{ .Version }}
+        -X github.com/b1rd33/technograph/internal/buildinfo.Commit={{ .ShortCommit }}
+        -X github.com/b1rd33/technograph/internal/buildinfo.Date={{ .Date }}
 
 archives:
   - id: technograph
     ids:
       - technograph
+      - technograph-mcp
     formats:
       - tar.gz
     name_template: >-

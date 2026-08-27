@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/b1rd33/technograph/schemas/scan-report.schema.json",
+  "title": "Technograph scan report",
+  "type": "object",
+  "required": ["schema_version", "request_id", "generated_at", "results", "summary"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "request_id": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/domainResult" }
+    },
+    "summary": { "$ref": "#/$defs/summary" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "issue": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "channel": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "domainResult": {
+      "type": "object",
+      "required": ["input_index", "input", "status", "technologies", "warnings", "errors", "elapsed_ms"],
+      "properties": {
+        "input_index": { "type": "integer", "minimum": 0 },
+        "input": { "type": "string" },
+        "domain": { "type": "string" },
+        "apex": { "type": "string" },
+        "status": { "enum": ["ok", "partial", "blocked", "failed", "invalid"] },
+        "technologies": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "evidence": { "type": "array", "items": { "type": "object" } },
+        "http": { "type": "object" },
+        "dns": { "type": "object" },
+        "warnings": { "type": "array", "items": { "$ref": "#/$defs/issue" } },
+        "errors": { "type": "array", "items": { "$ref": "#/$defs/issue" } },
+        "elapsed_ms": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "object",
+      "required": ["requested", "ok", "partial", "blocked", "failed", "invalid", "detections"],
+      "properties": {
+        "requested": { "type": "integer", "minimum": 0 },
+        "ok": { "type": "integer", "minimum": 0 },
+        "partial": { "type": "integer", "minimum": 0 },
+        "blocked": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "invalid": { "type": "integer", "minimum": 0 },
+        "detections": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -18,6 +18,7 @@ import (
 
 	"github.com/b1rd33/technograph/internal/extract"
 	"github.com/b1rd33/technograph/internal/model"
+	"github.com/b1rd33/technograph/internal/policy"
 )
 
 const (
@@ -34,6 +35,7 @@ type HTTPOptions struct {
 	MaxBodyBytes int64
 	MaxRedirects int
 	InsecureTLS  bool
+	SafeNetwork  bool
 	Logger       *slog.Logger
 	Transport    http.RoundTripper
 }
@@ -62,12 +64,19 @@ func NewHTTPProbe(options HTTPOptions) *HTTPProbe {
 		options.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	if options.Transport == nil {
+		dialer := &net.Dialer{
+			Timeout:   min(options.Timeout, 5*time.Second),
+			KeepAlive: 30 * time.Second,
+		}
+		dialContext := dialer.DialContext
+		proxy := http.ProxyFromEnvironment
+		if options.SafeNetwork {
+			dialContext = (policy.SafeDialer{Dialer: dialer}).DialContext
+			proxy = nil
+		}
 		options.Transport = &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   min(options.Timeout, 5*time.Second),
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
+			Proxy:                 proxy,
+			DialContext:           dialContext,
 			ForceAttemptHTTP2:     true,
 			MaxIdleConns:          40,
 			MaxIdleConnsPerHost:   4,

@@ -103,9 +103,41 @@ type Database struct {
 	count     int
 }
 
+// Descriptor is the stable, serializable view of one compiled fingerprint.
+type Descriptor struct {
+	Technology string        `json:"technology"`
+	Channel    model.Channel `json:"channel"`
+	Target     model.Part    `json:"target"`
+	Pattern    string        `json:"pattern"`
+	Confidence int           `json:"confidence"`
+}
+
 // Count returns the number of compiled patterns.
 func (database *Database) Count() int {
 	return database.count
+}
+
+// Descriptors returns fingerprints in deterministic technology/channel order.
+func (database *Database) Descriptors() []Descriptor {
+	descriptors := make([]Descriptor, 0, database.count)
+	for _, patterns := range database.byChannel {
+		for _, pattern := range patterns {
+			descriptors = append(descriptors, Descriptor{
+				Technology: pattern.Technology, Channel: pattern.Channel,
+				Target: pattern.Target, Pattern: pattern.Source, Confidence: pattern.Confidence,
+			})
+		}
+	}
+	sort.Slice(descriptors, func(i, j int) bool {
+		if descriptors[i].Technology != descriptors[j].Technology {
+			return descriptors[i].Technology < descriptors[j].Technology
+		}
+		if descriptors[i].Channel != descriptors[j].Channel {
+			return descriptors[i].Channel < descriptors[j].Channel
+		}
+		return descriptors[i].Pattern < descriptors[j].Pattern
+	})
+	return descriptors
 }
 
 // Load parses and compiles a normalized fingerprint file. Strict mode is used

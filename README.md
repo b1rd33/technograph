@@ -1,9 +1,13 @@
 # Technograph
 
-Technograph is a conservative, HTTP-only technographic detection CLI. It reads
-company domains, observes their public homepage and apex DNS records, matches
-those signals against a data file of Wappalyzer-style regular expressions, and
-writes the assignment's required JSON shape.
+Technograph is a conservative, HTTP-only technographic detection CLI and local
+MCP server. It reads company domains, observes their public homepage and apex
+DNS records, and matches those signals against Wappalyzer-style fingerprints.
+
+The original technical-home-assignment interface is preserved unchanged. v0.2
+adds a versioned JSON/JSONL interface, typed partial-failure states,
+snapshot comparison, SSRF protection for autonomous callers, and a separate
+stdio MCP binary. The immutable assignment submission is tagged `v0.1.0`.
 
 It does not execute JavaScript, use a headless browser, call a paid API, or try
 to bypass bot protection.
@@ -19,6 +23,10 @@ technograph --version
 
 Upgrade later releases with `brew upgrade technograph`.
 
+The formula installs both `technograph` and `technograph-mcp`. Homebrew handles
+the Go build dependency automatically; Go is not needed when using the
+installed binaries afterward.
+
 ### Build from source
 
 - Go 1.25 or newer
@@ -30,13 +38,13 @@ cd technograph
 make build
 ```
 
-The binary is written to `bin/technograph`. Dependencies are pinned in
-`go.mod` and `go.sum`.
+The binaries are written to `bin/technograph` and `bin/technograph-mcp`.
+Dependencies are pinned in `go.mod` and `go.sum`.
 
 Prebuilt archives and checksums for macOS and Linux on ARM64 and AMD64 are also
 available from the [GitHub releases](https://github.com/b1rd33/technograph/releases).
 
-## Usage
+## Original assignment usage
 
 Put one bare domain on each line of a text file, then run:
 
@@ -73,6 +81,41 @@ Diagnostics go to stderr. A failed or blocked individual domain does not abort
 the batch; configuration, input, fingerprint, and output errors return a
 nonzero exit status.
 
+## Agent and automation usage
+
+The structured interface accepts direct domains, stdin, or a file. Flags may
+appear before or after positional domains:
+
+```console
+technograph scan stripe.com shopify.com --format json
+printf 'stripe.com\nshopify.com\n' | technograph scan --format jsonl
+technograph scan --input domains.txt --output snapshot.json
+technograph validate example.com https://invalid.example
+technograph fingerprints
+technograph compare before.json after.json --output diff.json
+```
+
+JSON output uses schema version `1.0` and gives every input an `ok`, `partial`,
+`blocked`, `failed`, or `invalid` status plus typed warnings/errors. JSONL emits
+domain results in actual completion order. Logs stay on stderr, so stdout is
+safe to pipe into agents and automation.
+
+The separate `technograph-mcp` binary serves four local stdio tools:
+`scan_domain`, `scan_domains`, `validate_domain`, and `list_fingerprints`.
+
+```json
+{
+  "mcpServers": {
+    "technograph": { "command": "technograph-mcp" }
+  }
+}
+```
+
+See [docs/agent-interface.md](docs/agent-interface.md) for the complete contract,
+[docs/automation.md](docs/automation.md) for scheduling patterns, and
+[schemas/scan-report.schema.json](schemas/scan-report.schema.json) for the
+machine-readable schema. No Codex/ChatGPT skill is created or required.
+
 ## Output
 
 The required file contains every valid input domain, including domains for
@@ -98,7 +141,10 @@ separate so the required submission shape stays exact.
 The implementation is divided into small packages:
 
 - `internal/cli` validates bare domains, normalizes IDNs, derives registrable
-  apexes with the Public Suffix List, and owns command behavior.
+  apexes with the Public Suffix List, and preserves the original command.
+- `internal/app` constructs the reusable scanner used by every interface.
+- `internal/agentapi` defines the versioned status, report, streaming, and diff
+  contracts; `internal/agentcli` exposes them as structured subcommands.
 - `internal/probe` fetches homepages and performs exact MX, TXT, and apex CNAME
   queries. HTTPS is preferred; HTTP fallback occurs only for transport/TLS
   failures. DNS uses the system resolver configuration, nameserver failover,
@@ -114,6 +160,12 @@ The implementation is divided into small packages:
   parallel inside each domain job, each with a hard parent deadline. Results
   retain input order and partial successes.
 - `internal/output` creates deterministic required JSON and detailed reports.
+- `internal/policy` resolves and pins public addresses for autonomous HTTP
+  requests while rejecting private, loopback, link-local, metadata, multicast,
+  documentation, and other special-use networks.
+- `internal/mcpserver` exposes a small read-only tool surface using the official
+  Go MCP SDK. MCP dependencies and protocol output are isolated in the separate
+  `technograph-mcp` executable.
 
 The supplied fingerprint file uses a normalized representation because the
 assignment's header and cookie expressions match names, while native
@@ -142,6 +194,13 @@ scanner safely avoids claiming technologies from a Cloudflare challenge body.
 This may produce false negatives for technologies visible only after browser
 execution or only in protected HTML, which is the correct trade-off for this
 assignment.
+
+Structured CLI scans enable the autonomous network policy by default. It
+revalidates every connection and redirect, pins the validated address, allows
+only ports 80/443, and ignores proxy environment variables. A clearly named
+`--allow-private-network` escape hatch exists for trusted local CLI testing;
+it is deliberately unavailable through MCP. MCP also caps each request and
+global active work at 20 domains and accepts only embedded fingerprints.
 
 ## Fingerprint compatibility
 
@@ -173,7 +232,9 @@ make build
 The suite covers domain validation and fuzzing, all supplied fingerprints,
 wrong-channel negatives, structured extraction, redirects, TLS/HTTP fallback,
 compression, body limits, challenge suppression, DNS normalization and TCP
-retry, bounded concurrency, deterministic JSON, and atomic output.
+retry, bounded and completion-order concurrency, deterministic legacy JSON,
+typed agent output, conservative diffs, SSRF address policy, atomic output, and
+an in-memory MCP client/server integration test.
 
 ## Included real scan
 

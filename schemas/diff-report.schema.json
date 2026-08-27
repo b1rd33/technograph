@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/b1rd33/technograph/schemas/diff-report.schema.json",
+  "title": "Technograph snapshot diff",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "changes", "uncertain"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "before_request_id": { "type": "string" },
+    "after_request_id": { "type": "string" },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["domain", "technology", "kind"],
+        "properties": {
+          "domain": { "type": "string" },
+          "technology": { "type": "string" },
+          "kind": { "enum": ["added", "removed"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "uncertain": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["domain", "reason"],
+        "properties": {
+          "domain": { "type": "string" },
+          "reason": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

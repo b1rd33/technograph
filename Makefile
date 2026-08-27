@@ -15,6 +15,7 @@ race:
 build:
 	mkdir -p bin
 	go build -trimpath -o bin/technograph ./cmd/technograph
+	go build -trimpath -o bin/technograph-mcp ./cmd/technograph-mcp
 
 scan: build
 	./bin/technograph -output output.json domains.txt
@@ -26,5 +27,5 @@ snapshot:
 	goreleaser release --snapshot --clean
 
 clean:
-	rm -f bin/technograph coverage.out report.json
+	rm -f bin/technograph bin/technograph-mcp coverage.out report.json
 	rm -rf dist
