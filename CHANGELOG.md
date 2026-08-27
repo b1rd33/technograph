@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.2.2 — 2026-08-27
+
+- Retry partially decoded UDP DNS responses over TCP without extending the
+  configured per-resolver timeout.
+- Preserve fast resolver fallback for transport failures that return no DNS
+  response.
+- Add regression coverage for DNS decode errors, TCP failure isolation, and
+  gzip decompression before response body limits.
+- Clarify how redirect-set cookies can contribute signals at the final URL.
+
 ## v0.2.1 — 2026-08-27
 
 - Make `-h` and `--help` succeed with exit status 0 across the main CLI,

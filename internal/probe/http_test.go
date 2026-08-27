@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"compress/gzip"
 	"context"
 	"io"
 	"net"
@@ -146,6 +147,29 @@ func TestHTTPProbeBoundsBodyAndRejectsBinaryParsing(t *testing.T) {
 			t.Fatal("binary response was parsed as HTML")
 		}
 	}
+}
+
+func TestHTTPProbeDecompressesBeforeApplyingBodyLimit(t *testing.T) {
+	t.Parallel()
+	const script = `<script src="https://js.stripe.com/v3/"></script>`
+	body := script + strings.Repeat("x", 256)
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Content-Encoding", "gzip")
+		writer.Header().Set("Content-Type", "text/html")
+		compressed := gzip.NewWriter(writer)
+		_, _ = io.WriteString(compressed, body)
+		_ = compressed.Close()
+	}))
+	defer server.Close()
+
+	limit := int64(len(script) + 16)
+	probe := NewHTTPProbe(HTTPOptions{Timeout: time.Second, MaxBodyBytes: limit})
+	defer probe.CloseIdleConnections()
+	result, signals := probe.Probe(context.Background(), strings.TrimPrefix(server.URL, "http://"))
+	if result.Error != "" || !result.BodyTruncated || int64(result.BodyBytes) != limit {
+		t.Fatalf("result = %#v", result)
+	}
+	assertProbeSignal(t, signals, model.ChannelScript, "", "js.stripe.com/v3")
 }
 
 func assertProbeSignal(t *testing.T, signals []model.Signal, channel model.Channel, name, valueContains string) {

@@ -81,6 +81,94 @@ func TestDNSProbeRetriesTruncatedUDPOverTCP(t *testing.T) {
 	}
 }
 
+func TestDNSProbeRetriesPartiallyDecodedUDPOverTCP(t *testing.T) {
+	t.Parallel()
+	var mutex sync.Mutex
+	tcpCalls := 0
+	udp := exchangeFunc(func(_ context.Context, message *dns.Msg, _ string) (*dns.Msg, time.Duration, error) {
+		response := new(dns.Msg)
+		response.SetReply(message)
+		return response, 0, errors.New("dns: overflow unpacking uint16")
+	})
+	tcp := exchangeFunc(func(_ context.Context, message *dns.Msg, _ string) (*dns.Msg, time.Duration, error) {
+		mutex.Lock()
+		tcpCalls++
+		mutex.Unlock()
+		response := new(dns.Msg)
+		response.SetReply(message)
+		if message.Question[0].Qtype == dns.TypeTXT {
+			response.Answer = []dns.RR{
+				&dns.TXT{Hdr: rrHeader("example.com.", dns.TypeTXT), Txt: []string{"include:sendgrid.net"}},
+			}
+		}
+		return response, 0, nil
+	})
+	probe, _ := NewDNSProbe(DNSOptions{Servers: []string{"resolver:53"}, Timeout: time.Second, UDP: udp, TCP: tcp})
+	result, _ := probe.Probe(context.Background(), "example.com")
+	if tcpCalls != 3 {
+		t.Fatalf("TCP calls = %d, want 3", tcpCalls)
+	}
+	if result.Status["txt"] != "ok" || strings.Join(result.TXT, "|") != "include:sendgrid.net" {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestDNSProbeDoesNotRetryTransportErrorOverTCP(t *testing.T) {
+	t.Parallel()
+	var mutex sync.Mutex
+	tcpCalls := 0
+	udp := exchangeFunc(func(_ context.Context, _ *dns.Msg, _ string) (*dns.Msg, time.Duration, error) {
+		return nil, 0, errors.New("resolver unavailable")
+	})
+	tcp := exchangeFunc(func(_ context.Context, message *dns.Msg, _ string) (*dns.Msg, time.Duration, error) {
+		mutex.Lock()
+		tcpCalls++
+		mutex.Unlock()
+		response := new(dns.Msg)
+		response.SetReply(message)
+		return response, 0, nil
+	})
+	probe, _ := NewDNSProbe(DNSOptions{Servers: []string{"resolver:53"}, Timeout: time.Second, UDP: udp, TCP: tcp})
+	result, _ := probe.Probe(context.Background(), "example.com")
+	if tcpCalls != 0 {
+		t.Fatalf("TCP calls = %d, want 0", tcpCalls)
+	}
+	if len(result.Errors) != 3 {
+		t.Fatalf("errors = %#v, want one error per record type", result.Errors)
+	}
+}
+
+func TestDNSProbeContinuesAfterTCPFallbackFailure(t *testing.T) {
+	t.Parallel()
+	udp := exchangeFunc(func(_ context.Context, message *dns.Msg, server string) (*dns.Msg, time.Duration, error) {
+		response := new(dns.Msg)
+		response.SetReply(message)
+		if server == "first:53" {
+			return response, 0, errors.New("dns: overflowing header size")
+		}
+		if message.Question[0].Qtype == dns.TypeMX {
+			response.Answer = []dns.RR{
+				&dns.MX{Hdr: rrHeader("example.com.", dns.TypeMX), Mx: "mail.example.com."},
+			}
+		}
+		return response, 0, nil
+	})
+	tcp := exchangeFunc(func(_ context.Context, _ *dns.Msg, server string) (*dns.Msg, time.Duration, error) {
+		if server == "first:53" {
+			return nil, 0, errors.New("TCP unavailable")
+		}
+		return nil, 0, errors.New("unexpected TCP call")
+	})
+	probe, _ := NewDNSProbe(DNSOptions{Servers: []string{"first:53", "second:53"}, Timeout: time.Second, UDP: udp, TCP: tcp})
+	result, _ := probe.Probe(context.Background(), "example.com")
+	if result.Status["mx"] != "ok" || strings.Join(result.MX, "|") != "mail.example.com" {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(result.Errors) != 0 {
+		t.Fatalf("errors = %#v, want successful resolver fallback", result.Errors)
+	}
+}
+
 func TestDNSFailureIsIsolatedByRecordType(t *testing.T) {
 	t.Parallel()
 	exchanger := exchangeFunc(func(_ context.Context, message *dns.Msg, _ string) (*dns.Msg, time.Duration, error) {

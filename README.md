@@ -179,7 +179,8 @@ deduplicated.
 
 Accuracy is intentionally favored over recall:
 
-- only the final response contributes HTTP signals;
+- only the final response's headers and body are inspected; cookies accepted
+  during redirects may contribute when they apply to the final URL;
 - TLS verification is enabled unless the user explicitly opts out;
 - response bodies are capped after decompression;
 - confirmed challenge pages are recorded but their HTML/script/meta signals

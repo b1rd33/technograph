@@ -137,7 +137,11 @@ func (probe *DNSProbe) query(ctx context.Context, apex string, qtype uint16) ([]
 	for _, server := range probe.servers {
 		queryContext, cancel := context.WithTimeout(ctx, probe.timeout)
 		response, _, err := probe.udp.ExchangeContext(queryContext, message.Copy(), server)
-		if err == nil && response != nil && response.Truncated {
+		// miekg/dns can return a partially decoded message together with an
+		// unpacking error. Retry those responses over TCP as well as responses
+		// carrying the DNS truncation bit; both indicate that useful UDP bytes
+		// arrived but could not be consumed reliably.
+		if response != nil && (response.Truncated || err != nil) {
 			response, _, err = probe.tcp.ExchangeContext(queryContext, message.Copy(), server)
 		}
 		cancel()
