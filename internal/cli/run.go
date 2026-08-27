@@ -27,9 +27,20 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, bundledFi
 	insecure := flags.Bool("insecure", false, "disable TLS certificate verification")
 	verbose := flags.Bool("verbose", false, "enable verbose diagnostics")
 	showVersion := flags.Bool("version", false, "print version information and exit")
-	flags.Usage = func() {
-		fmt.Fprintln(stderr, "Usage: technograph [flags] domains.txt")
+	printUsage := func(writer io.Writer) {
+		fmt.Fprintln(writer, "Usage: technograph [flags] domains.txt")
+		flags.SetOutput(writer)
 		flags.PrintDefaults()
+	}
+	flags.Usage = func() { printUsage(stderr) }
+	for _, argument := range args {
+		if argument == "--" {
+			break
+		}
+		if argument == "-h" || argument == "--help" {
+			printUsage(stdout)
+			return 0
+		}
 	}
 	if err := flags.Parse(args); err != nil {
 		return 2

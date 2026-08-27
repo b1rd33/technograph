@@ -59,3 +59,44 @@ func TestIntersperseRejectsUnknownFlags(t *testing.T) {
 		t.Fatal("expected an error")
 	}
 }
+
+func TestHelpUsesStdoutAndSucceeds(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"top-level long", []string{"--help"}, "technograph scan"},
+		{"top-level short", []string{"-h"}, "technograph validate"},
+		{"scan", []string{"scan", "--help"}, "Usage: technograph scan"},
+		{"validate", []string{"validate", "-h"}, "Usage: technograph validate"},
+		{"fingerprints", []string{"fingerprints", "--help"}, "Usage: technograph fingerprints"},
+		{"compare", []string{"compare", "-h"}, "Usage: technograph compare"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := Run(context.Background(), test.args, strings.NewReader(""), &stdout, &stderr, nil)
+			if code != 0 {
+				t.Fatalf("code = %d, stderr = %q", code, stderr.String())
+			}
+			if !strings.Contains(stdout.String(), test.want) {
+				t.Fatalf("stdout = %q, want %q", stdout.String(), test.want)
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("stderr = %q", stderr.String())
+			}
+		})
+	}
+}
+
+func TestHelpAfterDoubleDashIsTreatedAsInput(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"validate", "--", "--help"}, strings.NewReader(""), &stdout, &stderr, nil)
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
+	}
+	if !bytes.Contains(stdout.Bytes(), []byte(`"status": "invalid"`)) {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+}

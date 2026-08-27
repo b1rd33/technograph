@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.1 — 2026-08-27
+
+- Make `-h` and `--help` succeed with exit status 0 across the main CLI,
+  structured subcommands, and the MCP binary.
+- Send help text to stdout while keeping invalid-usage diagnostics on stderr.
+- Preserve literal positional arguments after the standard `--` delimiter.
+- Add regression tests for help, version, stream, and invalid-argument behavior.
+
 ## v0.2.0 — 2026-08-27
 
 - Preserve the original v0.1 file-based assignment command and required JSON.

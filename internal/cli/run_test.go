@@ -33,3 +33,21 @@ func TestRunVersionNeedsNoInput(t *testing.T) {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
 }
+
+func TestRunHelpUsesStdoutAndSucceeds(t *testing.T) {
+	for _, help := range []string{"-h", "--help"} {
+		t.Run(help, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := Run(context.Background(), []string{help}, &stdout, &stderr, nil)
+			if code != 0 {
+				t.Fatalf("code = %d", code)
+			}
+			if !bytes.Contains(stdout.Bytes(), []byte("Usage: technograph [flags] domains.txt")) {
+				t.Fatalf("stdout = %q", stdout.String())
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("stderr = %q", stderr.String())
+			}
+		})
+	}
+}

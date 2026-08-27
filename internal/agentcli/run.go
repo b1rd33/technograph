@@ -57,6 +57,27 @@ Structured commands accept flags before or after domain arguments. When no
 domains are provided, scan and validate read one domain per line from stdin.`)
 }
 
+func wantsHelp(args []string) bool {
+	for _, argument := range args {
+		if argument == "--" {
+			return false
+		}
+		if argument == "-h" || argument == "--help" {
+			return true
+		}
+	}
+	return false
+}
+
+func subcommandUsage(writer io.Writer, line string, flags *flag.FlagSet, details string) {
+	fmt.Fprintf(writer, "Usage: %s\n\nOptions:\n", line)
+	flags.SetOutput(writer)
+	flags.PrintDefaults()
+	if details != "" {
+		fmt.Fprintf(writer, "\n%s\n", details)
+	}
+}
+
 type scanFlags struct {
 	format          string
 	input           string
@@ -86,6 +107,11 @@ func runScan(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 	flags.BoolVar(&config.evidence, "evidence", true, "include matching evidence")
 	flags.BoolVar(&config.verbose, "verbose", false, "enable verbose diagnostics on stderr")
 	flags.BoolVar(&config.allowPrivateNet, "allow-private-network", false, "disable autonomous SSRF protection for this local invocation")
+	if wantsHelp(args) {
+		subcommandUsage(stdout, "technograph scan [flags] [domain ...]", flags,
+			"When no domains are provided, input is read from stdin. Per-domain failures are returned as structured results.")
+		return 0
+	}
 	normalized, err := intersperse(args, map[string]bool{
 		"format": true, "input": true, "output": true, "fingerprints": true,
 		"request-id": true, "concurrency": true, "timeout": true, "dns-timeout": true,
@@ -197,6 +223,11 @@ func runValidate(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	flags.SetOutput(stderr)
 	input := flags.String("input", "", "domain file path, or - for stdin")
 	outputPath := flags.String("output", "", "output path (default stdout)")
+	if wantsHelp(args) {
+		subcommandUsage(stdout, "technograph validate [flags] [domain ...]", flags,
+			"Validation performs no network access. When no domains are provided, input is read from stdin.")
+		return 0
+	}
 	normalized, err := intersperse(args, map[string]bool{"input": true, "output": true})
 	if err != nil || flags.Parse(normalized) != nil {
 		if err != nil {
@@ -226,6 +257,11 @@ func runFingerprints(args []string, stdout, stderr io.Writer, bundled []byte) in
 	flags.SetOutput(stderr)
 	path := flags.String("fingerprints", "", "external normalized fingerprint JSON")
 	outputPath := flags.String("output", "", "output path (default stdout)")
+	if wantsHelp(args) {
+		subcommandUsage(stdout, "technograph fingerprints [flags]", flags,
+			"Lists the exact fingerprint rules used by the scanner without making network requests.")
+		return 0
+	}
 	if flags.Parse(args) != nil || flags.NArg() != 0 {
 		return 2
 	}
@@ -252,6 +288,11 @@ func runCompare(args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("technograph compare", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	outputPath := flags.String("output", "", "output path (default stdout)")
+	if wantsHelp(args) {
+		subcommandUsage(stdout, "technograph compare [flags] before.json after.json", flags,
+			"Removals are suppressed as uncertain unless the current domain status is ok.")
+		return 0
+	}
 	normalized, err := intersperse(args, map[string]bool{"output": true})
 	if err != nil || flags.Parse(normalized) != nil {
 		if err != nil {
@@ -315,10 +356,12 @@ func collectInputs(arguments []string, inputPath string, stdin io.Reader) ([]str
 func intersperse(args []string, known map[string]bool) ([]string, error) {
 	options := make([]string, 0, len(args))
 	positionals := make([]string, 0, len(args))
+	forcePositionals := false
 	for index := 0; index < len(args); index++ {
 		argument := args[index]
 		if argument == "--" {
 			positionals = append(positionals, args[index+1:]...)
+			forcePositionals = true
 			break
 		}
 		if !strings.HasPrefix(argument, "-") || argument == "-" {
@@ -339,6 +382,9 @@ func intersperse(args []string, known map[string]bool) ([]string, error) {
 			index++
 			options = append(options, args[index])
 		}
+	}
+	if forcePositionals {
+		options = append(options, "--")
 	}
 	return append(options, positionals...), nil
 }
