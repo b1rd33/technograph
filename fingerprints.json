@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "technologies": {
+    "HubSpot": {
+      "patterns": [
+        { "channel": "script", "regex": "//js\\.hs-scripts\\.com/" },
+        { "channel": "script", "regex": "//js\\.hsforms\\.net/" },
+        { "channel": "dns_txt", "regex": "hubspot-developer-verification" }
+      ]
+    },
+    "Stripe": {
+      "patterns": [
+        { "channel": "script", "regex": "js\\.stripe\\.com/v3" },
+        { "channel": "header", "regex": "X-Stripe-.*" }
+      ]
+    },
+    "Google Analytics 4": {
+      "patterns": [
+        { "channel": "script", "regex": "google-analytics\\.com/g/collect" },
+        { "channel": "script", "regex": "gtag\\(" }
+      ]
+    },
+    "Intercom": {
+      "patterns": [
+        { "channel": "script", "regex": "widget\\.intercom\\.io/" },
+        { "channel": "cookie", "regex": "^intercom-" }
+      ]
+    },
+    "Cloudflare": {
+      "patterns": [
+        { "channel": "header", "regex": "cf-ray" },
+        { "channel": "header", "regex": "cf-cache-status" }
+      ]
+    },
+    "WordPress": {
+      "patterns": [
+        { "channel": "html", "regex": "/wp-content/" },
+        { "channel": "html", "regex": "/wp-includes/" }
+      ]
+    },
+    "Shopify": {
+      "patterns": [
+        { "channel": "html", "regex": "cdn\\.shopify\\.com" },
+        { "channel": "header", "regex": "X-ShopId" }
+      ]
+    },
+    "SendGrid": {
+      "patterns": [
+        { "channel": "dns_txt", "regex": "sendgrid\\.net" }
+      ]
+    },
+    "Salesforce": {
+      "patterns": [
+        { "channel": "dns_cname", "regex": "\\.salesforce\\.com" }
+      ]
+    },
+    "Google Workspace": {
+      "patterns": [
+        { "channel": "dns_mx", "regex": "google\\.com" }
+      ]
+    },
+    "Microsoft 365": {
+      "patterns": [
+        { "channel": "dns_mx", "regex": "protection\\.outlook\\.com" }
+      ]
+    },
+    "Zendesk": {
+      "patterns": [
+        { "channel": "script", "regex": "static\\.zdassets\\.com" }
+      ]
+    },
+    "Drift": {
+      "patterns": [
+        { "channel": "script", "regex": "js\\.driftt\\.com" }
+      ]
+    },
+    "Segment": {
+      "patterns": [
+        { "channel": "script", "regex": "cdn\\.segment\\.com/analytics\\.js" }
+      ]
+    },
+    "Sentry": {
+      "patterns": [
+        { "channel": "script", "regex": "browser\\.sentry-cdn\\.com" }
+      ]
+    },
+    "Hotjar": {
+      "patterns": [
+        { "channel": "script", "regex": "static\\.hotjar\\.com" }
+      ]
+    }
+  }
+}
+

@@ -1,0 +1,22 @@
+{
+  "notion.so": ["Cloudflare"],
+  "stripe.com": ["Google Workspace","Stripe"],
+  "intercom.com": ["Google Workspace","HubSpot"],
+  "shopify.com": ["Cloudflare","Google Workspace","SendGrid","Shopify"],
+  "hubspot.com": ["Cloudflare","Google Workspace","HubSpot"],
+  "linear.app": ["Cloudflare","Google Workspace"],
+  "vercel.com": ["Google Workspace","SendGrid"],
+  "figma.com": ["Google Workspace"],
+  "webflow.com": ["Cloudflare","Google Workspace","HubSpot"],
+  "loom.com": [],
+  "pipedrive.com": ["Cloudflare","Google Workspace"],
+  "typeform.com": ["Cloudflare","Google Analytics 4","Google Workspace","HubSpot","SendGrid"],
+  "calendly.com": ["Cloudflare","Google Workspace","HubSpot"],
+  "segment.com": ["Google Analytics 4","Google Workspace","HubSpot","Segment"],
+  "hotjar.com": ["Google Workspace","HubSpot"],
+  "drift.com": ["Cloudflare","Google Workspace","SendGrid"],
+  "zendesk.com": ["Cloudflare","Google Workspace","HubSpot","Zendesk"],
+  "mailchimp.com": ["Google Analytics 4"],
+  "sendgrid.com": ["Google Analytics 4","Google Workspace","Segment"],
+  "sentry.io": ["Google Workspace","SendGrid","Sentry"]
+}
