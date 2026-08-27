@@ -57,7 +57,6 @@ homebrew_casks:
       owner: b1rd33
       name: homebrew-tap
       branch: main
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Casks
     homepage: "https://github.com/b1rd33/technograph"
     description: "Conservative HTTP-only technographic detection CLI"
@@ -65,6 +64,10 @@ homebrew_casks:
     commit_author:
       name: goreleaserbot
       email: actions@users.noreply.github.com
+    # Publish the generated cask manually after verifying each release. This
+    # avoids persisting a broad account token in Actions; a future tap-scoped
+    # token can safely enable automatic upload.
+    skip_upload: true
 
 checksum:
   name_template: checksums.txt
