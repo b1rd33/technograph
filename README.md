@@ -13,11 +13,11 @@ to bypass bot protection.
 ### Homebrew
 
 ```console
-brew install --cask b1rd33/tap/technograph
+brew install b1rd33/tap/technograph
 technograph --version
 ```
 
-Upgrade later releases with `brew upgrade --cask technograph`.
+Upgrade later releases with `brew upgrade technograph`.
 
 ### Build from source
 
