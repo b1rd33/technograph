@@ -2,7 +2,7 @@
 .idea/
 .vscode/
 bin/
+dist/
 coverage.out
 report.json
 work/
-

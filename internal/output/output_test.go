@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/christiannikolov/technograph/internal/model"
+	"github.com/b1rd33/technograph/internal/model"
 )
 
 func TestRequiredJSONStableAndEmptyArray(t *testing.T) {

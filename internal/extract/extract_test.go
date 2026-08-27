@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/christiannikolov/technograph/internal/model"
+	"github.com/b1rd33/technograph/internal/model"
 )
 
 func TestHeadersSeparateNamesAndValues(t *testing.T) {

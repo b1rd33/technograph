@@ -1,0 +1,88 @@
+version: 2
+
+project_name: technograph
+
+metadata:
+  mod_timestamp: "{{ .CommitTimestamp }}"
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: technograph
+    main: ./cmd/technograph
+    binary: technograph
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - >-
+        -s -w
+        -X github.com/b1rd33/technograph/internal/buildinfo.Version={{ .Version }}
+        -X github.com/b1rd33/technograph/internal/buildinfo.Commit={{ .ShortCommit }}
+        -X github.com/b1rd33/technograph/internal/buildinfo.Date={{ .Date }}
+
+archives:
+  - id: technograph
+    ids:
+      - technograph
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - LICENSE
+      - README.md
+
+homebrew_casks:
+  - name: technograph
+    ids:
+      - technograph
+    binaries:
+      - technograph
+    repository:
+      owner: b1rd33
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Casks
+    homepage: "https://github.com/b1rd33/technograph"
+    description: "Conservative HTTP-only technographic detection CLI"
+    commit_msg_template: "technograph: update to {{ .Tag }}"
+    commit_author:
+      name: goreleaserbot
+      email: actions@users.noreply.github.com
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  github:
+    owner: b1rd33
+    name: technograph
+  draft: false
+  prerelease: auto

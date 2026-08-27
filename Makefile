@@ -1,4 +1,4 @@
-.PHONY: fmt vet test race build scan clean
+.PHONY: fmt vet test race build scan release-check snapshot clean
 
 fmt:
 	go fmt ./...
@@ -19,6 +19,12 @@ build:
 scan: build
 	./bin/technograph -output output.json domains.txt
 
+release-check:
+	goreleaser check
+
+snapshot:
+	goreleaser release --snapshot --clean
+
 clean:
 	rm -f bin/technograph coverage.out report.json
-
+	rm -rf dist

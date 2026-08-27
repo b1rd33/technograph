@@ -22,3 +22,14 @@ func TestRunRejectsInvalidInputBeforeFingerprintLoading(t *testing.T) {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
+
+func TestRunVersionNeedsNoInput(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"--version"}, &stdout, &stderr, nil)
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
+	}
+	if !bytes.Contains(stdout.Bytes(), []byte("technograph dev")) {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+}

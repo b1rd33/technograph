@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/christiannikolov/technograph/internal/model"
+	"github.com/b1rd33/technograph/internal/model"
 )
 
 // Warning describes a pattern skipped while loading a non-strict external

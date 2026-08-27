@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/christiannikolov/technograph/internal/model"
+	"github.com/b1rd33/technograph/internal/model"
 	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
 )

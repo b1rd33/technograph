@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/christiannikolov/technograph/internal/model"
+	"github.com/b1rd33/technograph/internal/model"
 	"github.com/miekg/dns"
 )
 

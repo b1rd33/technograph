@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"testing"
 
-	technograph "github.com/christiannikolov/technograph"
+	technograph "github.com/b1rd33/technograph"
 )
 
 type fingerprintFile struct {

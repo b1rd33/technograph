@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/christiannikolov/technograph/internal/fingerprint"
-	"github.com/christiannikolov/technograph/internal/model"
+	"github.com/b1rd33/technograph/internal/fingerprint"
+	"github.com/b1rd33/technograph/internal/model"
 )
 
 type fakeHTTP struct{ active, maximum atomic.Int32 }

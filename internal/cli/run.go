@@ -9,10 +9,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/christiannikolov/technograph/internal/fingerprint"
-	"github.com/christiannikolov/technograph/internal/output"
-	"github.com/christiannikolov/technograph/internal/probe"
-	"github.com/christiannikolov/technograph/internal/scanner"
+	"github.com/b1rd33/technograph/internal/buildinfo"
+	"github.com/b1rd33/technograph/internal/fingerprint"
+	"github.com/b1rd33/technograph/internal/output"
+	"github.com/b1rd33/technograph/internal/probe"
+	"github.com/b1rd33/technograph/internal/scanner"
 )
 
 // Run executes the CLI and returns a process exit code.
@@ -27,12 +28,17 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, bundledFi
 	reportPath := flags.String("report", "", "optional detailed evidence report path")
 	insecure := flags.Bool("insecure", false, "disable TLS certificate verification")
 	verbose := flags.Bool("verbose", false, "enable verbose diagnostics")
+	showVersion := flags.Bool("version", false, "print version information and exit")
 	flags.Usage = func() {
 		fmt.Fprintln(stderr, "Usage: technograph [flags] domains.txt")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
 		return 2
+	}
+	if *showVersion {
+		fmt.Fprintln(stdout, buildinfo.String())
+		return 0
 	}
 	if flags.NArg() != 1 {
 		flags.Usage()

@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/christiannikolov/technograph/internal/extract"
-	"github.com/christiannikolov/technograph/internal/model"
+	"github.com/b1rd33/technograph/internal/extract"
+	"github.com/b1rd33/technograph/internal/model"
 )
 
 const (

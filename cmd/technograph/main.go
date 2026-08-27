@@ -5,8 +5,8 @@ import (
 	"context"
 	"os"
 
-	technograph "github.com/christiannikolov/technograph"
-	"github.com/christiannikolov/technograph/internal/cli"
+	technograph "github.com/b1rd33/technograph"
+	"github.com/b1rd33/technograph/internal/cli"
 )
 
 func main() {

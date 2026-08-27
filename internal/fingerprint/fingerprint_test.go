@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	technograph "github.com/christiannikolov/technograph"
-	"github.com/christiannikolov/technograph/internal/model"
+	technograph "github.com/b1rd33/technograph"
+	"github.com/b1rd33/technograph/internal/model"
 )
 
 func defaultEngine(t *testing.T) *Engine {

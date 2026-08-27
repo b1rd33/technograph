@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/christiannikolov/technograph/internal/fingerprint"
-	"github.com/christiannikolov/technograph/internal/model"
+	"github.com/b1rd33/technograph/internal/fingerprint"
+	"github.com/b1rd33/technograph/internal/model"
 )
 
 type HTTPProber interface {

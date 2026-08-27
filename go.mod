@@ -1,4 +1,4 @@
-module github.com/christiannikolov/technograph
+module github.com/b1rd33/technograph
 
 go 1.25.0
 

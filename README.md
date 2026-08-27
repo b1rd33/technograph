@@ -8,19 +8,33 @@ writes the assignment's required JSON shape.
 It does not execute JavaScript, use a headless browser, call a paid API, or try
 to bypass bot protection.
 
-## Requirements and installation
+## Installation
+
+### Homebrew
+
+```console
+brew install --cask b1rd33/tap/technograph
+technograph --version
+```
+
+Upgrade later releases with `brew upgrade --cask technograph`.
+
+### Build from source
 
 - Go 1.25 or newer
 - Network access to public HTTP(S) endpoints and the system DNS resolver
 
 ```console
-git clone <repository-url>
+git clone https://github.com/b1rd33/technograph.git
 cd technograph
 make build
 ```
 
 The binary is written to `bin/technograph`. Dependencies are pinned in
 `go.mod` and `go.sum`.
+
+Prebuilt archives and checksums for macOS and Linux on ARM64 and AMD64 are also
+available from the [GitHub releases](https://github.com/b1rd33/technograph/releases).
 
 ## Usage
 
