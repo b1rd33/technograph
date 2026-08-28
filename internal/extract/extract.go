@@ -86,9 +86,16 @@ func Cookies(cookies []*http.Cookie) []model.Signal {
 // Document statically extracts raw HTML, script URLs, inline source, meta
 // fields, and syntactic window.* references. JavaScript is never executed.
 func Document(body []byte, baseURL *url.URL) ([]model.Signal, error) {
+	signals, _, err := DocumentWithLinks(body, baseURL)
+	return signals, err
+}
+
+// DocumentWithLinks extracts the same static signals plus resolved anchor URLs
+// for the bounded opt-in crawler. It does not fetch or execute anything.
+func DocumentWithLinks(body []byte, baseURL *url.URL) ([]model.Signal, []string, error) {
 	document, err := html.Parse(bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	signals := []model.Signal{{
 		Channel: model.ChannelHTML,
@@ -96,11 +103,16 @@ func Document(body []byte, baseURL *url.URL) ([]model.Signal, error) {
 		Origin:  "html:body",
 	}}
 	windowNames := make(map[string]struct{})
+	links := make([]string, 0)
 
 	var walk func(*html.Node)
 	walk = func(node *html.Node) {
 		if node.Type == html.ElementNode {
 			switch strings.ToLower(node.Data) {
+			case "a":
+				if resolved := resolveDocumentURL(baseURL, attribute(node, "href")); resolved != "" {
+					links = append(links, resolved)
+				}
 			case "script":
 				source := attribute(node, "src")
 				if source != "" {
@@ -164,7 +176,7 @@ func Document(body []byte, baseURL *url.URL) ([]model.Signal, error) {
 			Origin:  "html:window-global-syntax",
 		})
 	}
-	return signals, nil
+	return signals, links, nil
 }
 
 func attribute(node *html.Node, key string) string {
@@ -177,6 +189,10 @@ func attribute(node *html.Node, key string) string {
 }
 
 func resolveScriptURL(baseURL *url.URL, source string) string {
+	return resolveDocumentURL(baseURL, source)
+}
+
+func resolveDocumentURL(baseURL *url.URL, source string) string {
 	if baseURL == nil {
 		return ""
 	}

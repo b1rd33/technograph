@@ -390,6 +390,7 @@ func (engine *Engine) Detect(signals []model.Signal) ([]string, []model.Evidence
 				Pattern:    pattern.Source,
 				Matched:    match,
 				Origin:     signal.Origin,
+				PageURL:    signal.PageURL,
 				Confidence: pattern.Confidence,
 			})
 		}

@@ -68,6 +68,20 @@ func TestDocumentToleratesMalformedHTML(t *testing.T) {
 	assertSignal(t, signals, model.ChannelScript, "", "gtag(")
 }
 
+func TestDocumentWithLinksResolvesNavigationCandidates(t *testing.T) {
+	t.Parallel()
+	base, _ := url.Parse("https://example.com/products/")
+	_, links, err := DocumentWithLinks([]byte(`<a href="../pricing?source=nav#plans">Pricing</a>
+		<a href="https://other.example/contact">External</a><a href="#top">Top</a>`), base)
+	if err != nil {
+		t.Fatalf("DocumentWithLinks: %v", err)
+	}
+	want := []string{"https://example.com/pricing?source=nav#plans", "https://other.example/contact", "https://example.com/products/#top"}
+	if strings.Join(links, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("links = %#v, want %#v", links, want)
+	}
+}
+
 func TestInlineScriptIsBounded(t *testing.T) {
 	t.Parallel()
 	body := `<script>` + strings.Repeat("x", maxInlineScriptBytes+100) + `</script>`

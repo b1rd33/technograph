@@ -46,6 +46,7 @@ type Signal struct {
 	Name    string
 	Value   string
 	Origin  string
+	PageURL string
 }
 
 // Text returns the structural part selected by target.
@@ -64,5 +65,6 @@ type Evidence struct {
 	Pattern    string  `json:"pattern"`
 	Matched    string  `json:"matched"`
 	Origin     string  `json:"origin"`
+	PageURL    string  `json:"page_url,omitempty"`
 	Confidence int     `json:"confidence"`
 }

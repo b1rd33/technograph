@@ -161,6 +161,27 @@ func (runner Runner) convertResult(index int, input string, scanned model.ScanRe
 		result.Errors = append(result.Errors, Issue{Code: "HTTP_FETCH_FAILED", Message: scanned.HTTP.Error, Channel: "http"})
 		result.Status = StatusPartial
 	}
+	for _, page := range scanned.HTTP.Pages {
+		if page.BodyTruncated {
+			result.Warnings = append(result.Warnings, Issue{Code: "PAGE_BODY_TRUNCATED", Message: "secondary response body exceeded the configured limit: " + page.RequestedURL, Channel: "http_page"})
+		}
+		if page.Blocked || page.Challenge {
+			message := page.BlockReason
+			if message == "" {
+				message = "secondary page was blocked"
+			}
+			result.Warnings = append(result.Warnings, Issue{Code: "PAGE_BLOCKED", Message: page.RequestedURL + ": " + message, Channel: "http_page"})
+			if result.Status == StatusOK {
+				result.Status = StatusPartial
+			}
+		}
+		if page.Error != "" {
+			result.Errors = append(result.Errors, Issue{Code: "PAGE_FETCH_FAILED", Message: page.RequestedURL + ": " + page.Error, Channel: "http_page"})
+			if result.Status == StatusOK {
+				result.Status = StatusPartial
+			}
+		}
+	}
 	dnsFailures := 0
 	keys := make([]string, 0, len(scanned.DNS.Errors))
 	for channel := range scanned.DNS.Errors {

@@ -172,6 +172,78 @@ func TestHTTPProbeDecompressesBeforeApplyingBodyLimit(t *testing.T) {
 	assertProbeSignal(t, signals, model.ChannelScript, "", "js.stripe.com/v3")
 }
 
+func TestHTTPProbeDefaultsToHomepageOnly(t *testing.T) {
+	t.Parallel()
+	requests := 0
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		return response(request, 200, http.Header{"Content-Type": {"text/html"}},
+			`<a href="/pricing">Pricing</a><script src="https://js.stripe.com/v3/"></script>`), nil
+	})
+	probe := NewHTTPProbe(HTTPOptions{Timeout: time.Second, Transport: transport})
+	result, signals := probe.Probe(context.Background(), "example.com")
+	if requests != 1 || result.PageCount != 0 || len(result.Pages) != 0 {
+		t.Fatalf("requests=%d result=%#v", requests, result)
+	}
+	for _, signal := range signals {
+		if signal.PageURL != "" {
+			t.Fatalf("default scan added page URL: %#v", signal)
+		}
+	}
+}
+
+func TestHTTPProbeCrawlsBoundedSameHostPagesDeterministically(t *testing.T) {
+	t.Parallel()
+	var requested []string
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requested = append(requested, request.URL.String())
+		switch request.URL.Path {
+		case "", "/":
+			return response(request, 200, http.Header{"Content-Type": {"text/html"}}, `<a href="/contact?x=1">Contact</a>
+				<a href="/pricing#plans">Pricing</a><a href="/pricing?duplicate=1">Duplicate</a>
+				<a href="https://other.example/features">External</a><a href="/asset.pdf">PDF</a>`), nil
+		case "/pricing":
+			return response(request, 200, http.Header{"Content-Type": {"text/html"}}, `<script src="https://js.stripe.com/v3/"></script>`), nil
+		case "/contact":
+			return response(request, 200, http.Header{"Content-Type": {"text/html"}}, `<script src="https://static.hotjar.com/c/hotjar.js"></script>`), nil
+		default:
+			t.Fatalf("unexpected request %s", request.URL)
+			return nil, nil
+		}
+	})
+	probe := NewHTTPProbe(HTTPOptions{Timeout: time.Second, PageLimit: 3, Transport: transport})
+	result, signals := probe.Probe(context.Background(), "example.com")
+	wantRequests := "https://example.com,https://example.com/pricing,https://example.com/contact"
+	if strings.Join(requested, ",") != wantRequests {
+		t.Fatalf("requests = %s, want %s", strings.Join(requested, ","), wantRequests)
+	}
+	if result.PageCount != 3 || len(result.Pages) != 2 {
+		t.Fatalf("result = %#v", result)
+	}
+	assertSignalPage(t, signals, model.ChannelScript, "js.stripe.com/v3", "https://example.com/pricing")
+	assertSignalPage(t, signals, model.ChannelScript, "static.hotjar.com", "https://example.com/contact")
+}
+
+func TestHTTPProbeRejectsSecondaryCrossHostRedirect(t *testing.T) {
+	t.Parallel()
+	var requested []string
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requested = append(requested, request.URL.String())
+		if request.URL.Path == "" || request.URL.Path == "/" {
+			return response(request, 200, http.Header{"Content-Type": {"text/html"}}, `<a href="/leave">Leave</a>`), nil
+		}
+		return response(request, http.StatusFound, http.Header{"Location": {"https://other.example/landing"}}, ""), nil
+	})
+	probe := NewHTTPProbe(HTTPOptions{Timeout: time.Second, PageLimit: 2, Transport: transport})
+	result, _ := probe.Probe(context.Background(), "example.com")
+	if strings.Join(requested, ",") != "https://example.com,https://example.com/leave" {
+		t.Fatalf("requests = %v", requested)
+	}
+	if len(result.Pages) != 1 || !strings.Contains(result.Pages[0].Error, errCrossHostRedirect.Error()) {
+		t.Fatalf("pages = %#v", result.Pages)
+	}
+}
+
 func assertProbeSignal(t *testing.T, signals []model.Signal, channel model.Channel, name, valueContains string) {
 	t.Helper()
 	for _, signal := range signals {
@@ -180,6 +252,16 @@ func assertProbeSignal(t *testing.T, signals []model.Signal, channel model.Chann
 		}
 	}
 	t.Fatalf("missing channel=%s name=%q value containing %q", channel, name, valueContains)
+}
+
+func assertSignalPage(t *testing.T, signals []model.Signal, channel model.Channel, valueContains, pageURL string) {
+	t.Helper()
+	for _, signal := range signals {
+		if signal.Channel == channel && strings.Contains(signal.Value, valueContains) && signal.PageURL == pageURL {
+			return
+		}
+	}
+	t.Fatalf("missing channel=%s value containing %q page=%q", channel, valueContains, pageURL)
 }
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

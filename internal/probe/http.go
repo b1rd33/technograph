@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"path"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,16 +26,19 @@ import (
 const (
 	defaultMaxBodyBytes = 2 * 1024 * 1024
 	defaultMaxRedirects = 10
+	maximumPageLimit    = 5
 	userAgent           = "technograph/1.0 (HTTP-only technology detector)"
 )
 
 var errTooManyRedirects = errors.New("maximum redirects exceeded")
+var errCrossHostRedirect = errors.New("secondary page redirected to another host")
 
 // HTTPOptions configures the reusable homepage probe.
 type HTTPOptions struct {
 	Timeout      time.Duration
 	MaxBodyBytes int64
 	MaxRedirects int
+	PageLimit    int
 	InsecureTLS  bool
 	SafeNetwork  bool
 	Logger       *slog.Logger
@@ -46,6 +51,7 @@ type HTTPProbe struct {
 	timeout      time.Duration
 	maxBodyBytes int64
 	maxRedirects int
+	pageLimit    int
 	logger       *slog.Logger
 	transport    http.RoundTripper
 }
@@ -59,6 +65,12 @@ func NewHTTPProbe(options HTTPOptions) *HTTPProbe {
 	}
 	if options.MaxRedirects <= 0 {
 		options.MaxRedirects = defaultMaxRedirects
+	}
+	if options.PageLimit <= 0 {
+		options.PageLimit = 1
+	}
+	if options.PageLimit > maximumPageLimit {
+		options.PageLimit = maximumPageLimit
 	}
 	if options.Logger == nil {
 		options.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -89,6 +101,7 @@ func NewHTTPProbe(options HTTPOptions) *HTTPProbe {
 	return &HTTPProbe{
 		timeout: options.Timeout, maxBodyBytes: options.MaxBodyBytes,
 		maxRedirects: options.MaxRedirects, logger: options.Logger,
+		pageLimit: options.PageLimit,
 		transport: options.Transport,
 	}
 }
@@ -107,9 +120,9 @@ func (probe *HTTPProbe) Probe(ctx context.Context, hostname string) (model.HTTPR
 	defer cancel()
 
 	httpsURL := "https://" + hostname
-	result, signals, err := probe.attempt(ctx, httpsURL)
+	result, signals, links, err := probe.attempt(ctx, httpsURL, "")
 	if err == nil {
-		return result, signals
+		return probe.crawl(ctx, result, signals, links)
 	}
 	if ctx.Err() != nil || errors.Is(err, errTooManyRedirects) || !isTransportFailure(err) {
 		result.Error = err.Error()
@@ -117,28 +130,31 @@ func (probe *HTTPProbe) Probe(ctx context.Context, hostname string) (model.HTTPR
 	}
 
 	httpURL := "http://" + hostname
-	result, signals, err = probe.attempt(ctx, httpURL)
+	result, signals, links, err = probe.attempt(ctx, httpURL, "")
 	if err != nil {
 		result.Error = err.Error()
 		return result, nil
 	}
-	return result, signals
+	return probe.crawl(ctx, result, signals, links)
 }
 
-func (probe *HTTPProbe) attempt(ctx context.Context, target string) (model.HTTPResult, []model.Signal, error) {
+func (probe *HTTPProbe) attempt(ctx context.Context, target, allowedHost string) (model.HTTPResult, []model.Signal, []string, error) {
 	result := model.HTTPResult{RequestedURL: target}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		return result, nil, fmt.Errorf("create cookie jar: %w", err)
+		return result, nil, nil, fmt.Errorf("create cookie jar: %w", err)
 	}
 	redirects := 0
 	client := &http.Client{
 		Transport: probe.transport,
 		Jar:       jar,
-		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
+		CheckRedirect: func(request *http.Request, via []*http.Request) error {
 			redirects = len(via)
 			if len(via) >= probe.maxRedirects {
 				return errTooManyRedirects
+			}
+			if allowedHost != "" && !strings.EqualFold(request.URL.Hostname(), allowedHost) {
+				return errCrossHostRedirect
 			}
 			return nil
 		},
@@ -146,7 +162,7 @@ func (probe *HTTPProbe) attempt(ctx context.Context, target string) (model.HTTPR
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
-		return result, nil, fmt.Errorf("create request: %w", err)
+		return result, nil, nil, fmt.Errorf("create request: %w", err)
 	}
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
@@ -154,14 +170,14 @@ func (probe *HTTPProbe) attempt(ctx context.Context, target string) (model.HTTPR
 
 	response, err := client.Do(request)
 	if err != nil {
-		return result, nil, fmt.Errorf("request %s: %w", target, err)
+		return result, nil, nil, fmt.Errorf("request %s: %w", target, err)
 	}
 	defer response.Body.Close()
 
 	limited := io.LimitReader(response.Body, probe.maxBodyBytes+1)
 	body, err := io.ReadAll(limited)
 	if err != nil {
-		return result, nil, fmt.Errorf("read %s: %w", target, err)
+		return result, nil, nil, fmt.Errorf("read %s: %w", target, err)
 	}
 	if int64(len(body)) > probe.maxBodyBytes {
 		body = body[:probe.maxBodyBytes]
@@ -180,14 +196,159 @@ func (probe *HTTPProbe) attempt(ctx context.Context, target string) (model.HTTPR
 	if result.Blocked {
 		probe.logger.Warn("HTTP response blocked", "url", result.FinalURL, "reason", result.BlockReason)
 	}
+	links := []string{}
 	if response.StatusCode < http.StatusBadRequest && !result.Challenge && isHTMLResponse(response.Header.Get("Content-Type"), body) {
-		documentSignals, parseErr := extract.Document(body, response.Request.URL)
+		documentSignals, documentLinks, parseErr := extract.DocumentWithLinks(body, response.Request.URL)
 		if parseErr != nil {
-			return result, signals, fmt.Errorf("parse %s: %w", result.FinalURL, parseErr)
+			return result, signals, nil, fmt.Errorf("parse %s: %w", result.FinalURL, parseErr)
 		}
 		signals = append(signals, documentSignals...)
+		links = documentLinks
 	}
-	return result, signals, nil
+	return result, signals, links, nil
+}
+
+func (probe *HTTPProbe) crawl(ctx context.Context, result model.HTTPResult, signals []model.Signal, links []string) (model.HTTPResult, []model.Signal) {
+	if result.FinalURL == "" {
+		return result, signals
+	}
+	if probe.pageLimit <= 1 {
+		return result, signals
+	}
+	result.PageCount = 1
+	tagPageSignals(signals, result.FinalURL)
+	if result.Blocked {
+		return result, signals
+	}
+	primary, err := url.Parse(result.FinalURL)
+	if err != nil || primary.Hostname() == "" {
+		return result, signals
+	}
+	host := primary.Hostname()
+	seen := map[string]struct{}{}
+	if normalized := normalizeCrawlURL(result.FinalURL, host); normalized != "" {
+		seen[normalized] = struct{}{}
+	}
+	queue := make([]string, 0)
+	queued := make(map[string]struct{})
+	addLinks := func(values []string) {
+		for _, value := range values {
+			normalized := normalizeCrawlURL(value, host)
+			if normalized == "" {
+				continue
+			}
+			if _, exists := seen[normalized]; exists {
+				continue
+			}
+			if _, exists := queued[normalized]; exists {
+				continue
+			}
+			queued[normalized] = struct{}{}
+			queue = append(queue, normalized)
+		}
+		sort.Slice(queue, func(i, j int) bool {
+			left, right := crawlPriority(queue[i]), crawlPriority(queue[j])
+			if left != right {
+				return left < right
+			}
+			return queue[i] < queue[j]
+		})
+	}
+	addLinks(links)
+	for result.PageCount < probe.pageLimit && len(queue) > 0 && ctx.Err() == nil {
+		target := queue[0]
+		queue = queue[1:]
+		delete(queued, target)
+		if _, exists := seen[target]; exists {
+			continue
+		}
+		seen[target] = struct{}{}
+		page, pageSignals, pageLinks, err := probe.attempt(ctx, target, host)
+		if err != nil {
+			page.Error = err.Error()
+		}
+		result.Pages = append(result.Pages, secondaryPage(page))
+		result.PageCount++
+		if err != nil {
+			continue
+		}
+		if normalized := normalizeCrawlURL(page.FinalURL, host); normalized != "" {
+			seen[normalized] = struct{}{}
+		}
+		tagPageSignals(pageSignals, page.FinalURL)
+		signals = append(signals, pageSignals...)
+		addLinks(pageLinks)
+	}
+	return result, signals
+}
+
+func tagPageSignals(signals []model.Signal, pageURL string) {
+	for index := range signals {
+		signals[index].PageURL = pageURL
+	}
+}
+
+func secondaryPage(result model.HTTPResult) model.HTTPPageResult {
+	return model.HTTPPageResult{
+		RequestedURL: result.RequestedURL, FinalURL: result.FinalURL,
+		StatusCode: result.StatusCode, Redirects: result.Redirects,
+		ContentType: result.ContentType, BodyBytes: result.BodyBytes,
+		BodyTruncated: result.BodyTruncated, Blocked: result.Blocked,
+		Challenge: result.Challenge, BlockReason: result.BlockReason, Error: result.Error,
+	}
+}
+
+func normalizeCrawlURL(value, allowedHost string) string {
+	parsed, err := url.Parse(value)
+	if err != nil || (!strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https")) || parsed.User != nil {
+		return ""
+	}
+	if !strings.EqualFold(parsed.Hostname(), allowedHost) {
+		return ""
+	}
+	port := parsed.Port()
+	if port != "" && port != "80" && port != "443" {
+		return ""
+	}
+	cleanedPath := path.Clean(parsed.Path)
+	if cleanedPath == "." || cleanedPath == "" {
+		cleanedPath = "/"
+	}
+	if len(cleanedPath) > 512 || excludedCrawlExtension(cleanedPath) {
+		return ""
+	}
+	parsed.Scheme = strings.ToLower(parsed.Scheme)
+	parsed.Host = strings.ToLower(parsed.Host)
+	if (parsed.Scheme == "https" && port == "443") || (parsed.Scheme == "http" && port == "80") {
+		parsed.Host = strings.ToLower(parsed.Hostname())
+	}
+	parsed.Path = cleanedPath
+	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.ForceQuery = false
+	parsed.Fragment = ""
+	return parsed.String()
+}
+
+func excludedCrawlExtension(value string) bool {
+	extension := strings.ToLower(path.Ext(value))
+	switch extension {
+	case ".7z", ".avi", ".css", ".csv", ".doc", ".docx", ".gif", ".gz", ".ico", ".jpeg", ".jpg", ".js", ".json", ".map", ".mov", ".mp3", ".mp4", ".pdf", ".png", ".rar", ".rss", ".svg", ".tar", ".tgz", ".txt", ".webm", ".webp", ".xml", ".zip":
+		return true
+	default:
+		return false
+	}
+}
+
+func crawlPriority(value string) int {
+	lower := strings.ToLower(value)
+	keywords := []string{"/pricing", "/integrations", "/features", "/products", "/solutions", "/customers", "/about", "/contact"}
+	for index, keyword := range keywords {
+		if strings.Contains(lower, keyword) {
+			return index
+		}
+	}
+	return len(keywords) + strings.Count(lower, "/")
 }
 
 func classifyResponse(status int, headers http.Header, body []byte) (blocked, challenge bool, reason string) {

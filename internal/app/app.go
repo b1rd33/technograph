@@ -28,6 +28,7 @@ type Options struct {
 	DNSTimeout         time.Duration
 	DNSServers         []string
 	DomainTimeout      time.Duration
+	PageLimit          int
 	InsecureTLS        bool
 	SafeNetwork        bool
 	Logger             *slog.Logger
@@ -65,7 +66,7 @@ func New(options Options) (*Service, []fingerprint.Warning, error) {
 	if httpProber == nil {
 		configured := probe.NewHTTPProbe(probe.HTTPOptions{
 			Timeout: options.HTTPTimeout, InsecureTLS: options.InsecureTLS,
-			SafeNetwork: options.SafeNetwork, Logger: options.Logger,
+			SafeNetwork: options.SafeNetwork, PageLimit: options.PageLimit, Logger: options.Logger,
 		})
 		httpProber = configured
 		closeHTTP = configured.CloseIdleConnections

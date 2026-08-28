@@ -13,7 +13,8 @@ technograph history stripe.com --store /absolute/path/history --limit 10
 
 The first observation establishes a baseline. A changed scanner version or
 fingerprint SHA-256 establishes a fresh baseline as well, so software upgrades
-do not masquerade as website changes. History files use hashed domain
+do not masquerade as website changes. Changing the opt-in `--pages` coverage
+also establishes a fresh baseline. History files use hashed domain
 directories, atomic writes, and `0600` permissions.
 
 ## Cron

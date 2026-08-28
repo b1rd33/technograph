@@ -27,6 +27,7 @@ func runWatch(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 	flags.IntVar(&config.concurrency, "concurrency", 10, "maximum domains scanned concurrently")
 	flags.DurationVar(&config.httpTimeout, "timeout", 8*time.Second, "HTTP timeout per domain")
 	flags.DurationVar(&config.dnsTimeout, "dns-timeout", 3*time.Second, "timeout per DNS record query")
+	flags.IntVar(&config.pageLimit, "pages", 1, "maximum same-host HTML pages per domain (1-5)")
 	flags.Var(&config.dnsServers, "dns-server", "custom DNS resolver IP[:port] (repeatable)")
 	flags.BoolVar(&config.evidence, "evidence", true, "include matching evidence in stored observations")
 	flags.BoolVar(&config.verbose, "verbose", false, "enable verbose diagnostics on stderr")
@@ -41,6 +42,7 @@ technology changes. Per-domain partial or blocked scans suppress removals.
 
 Examples:
   technograph watch stripe.com --store .technograph-history
+  technograph watch stripe.com --pages 3 --store .technograph-history
   technograph watch --input domains.txt --store /absolute/history --output watch.json
   technograph watch stripe.com --store .technograph-history --fail-on-change`)
 		return 0
@@ -48,7 +50,7 @@ Examples:
 	normalized, err := intersperse(args, map[string]bool{
 		"store": true, "input": true, "output": true, "fingerprints": true,
 		"request-id": true, "concurrency": true, "timeout": true, "dns-timeout": true,
-		"dns-server": true, "evidence": false, "verbose": false,
+		"dns-server": true, "pages": true, "evidence": false, "verbose": false,
 		"allow-private-network": false, "fail-on-change": false,
 	})
 	if err != nil || flags.Parse(normalized) != nil {
@@ -63,6 +65,10 @@ Examples:
 	}
 	if config.concurrency < 1 || config.httpTimeout <= 0 || config.dnsTimeout <= 0 {
 		fmt.Fprintln(stderr, "technograph: concurrency and timeouts must be positive")
+		return 2
+	}
+	if config.pageLimit < 1 || config.pageLimit > 5 {
+		fmt.Fprintln(stderr, "technograph: pages must be between 1 and 5")
 		return 2
 	}
 	inputs, err := collectInputs(flags.Args(), config.input, stdin)
@@ -85,7 +91,9 @@ Examples:
 		stripEvidence(report.Results)
 	}
 	store := history.Store{Root: *storePath}
-	version := buildinfo.Identity()
+	// Page coverage changes what can be observed, so include it in history's
+	// compatibility identity and establish a baseline when callers change it.
+	version := fmt.Sprintf("%s;pages=%d", buildinfo.Identity(), config.pageLimit)
 	digest := service.FingerprintDigest()
 	changes, baselines, err := compareWithHistory(store, report, version, digest)
 	if err != nil {

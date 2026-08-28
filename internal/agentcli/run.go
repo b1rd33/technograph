@@ -73,6 +73,7 @@ Commands:
 Examples:
   technograph explain stripe.com
   technograph scan stripe.com shopify.com
+  technograph scan stripe.com --pages 3
   technograph scan --input domains.txt --output results.json
   technograph validate stripe.com https://invalid.example
   technograph compare before.json after.json
@@ -116,6 +117,7 @@ type scanFlags struct {
 	httpTimeout     time.Duration
 	dnsTimeout      time.Duration
 	dnsServers      stringList
+	pageLimit       int
 	evidence        bool
 	verbose         bool
 	allowPrivateNet bool
@@ -143,6 +145,7 @@ func newScanService(config scanFlags, bundled []byte, stderr io.Writer) (*app.Se
 		FingerprintData: fingerprintData, StrictFingerprints: strict,
 		Concurrency: config.concurrency, HTTPTimeout: config.httpTimeout, DNSTimeout: config.dnsTimeout,
 		DNSServers:    config.dnsServers,
+		PageLimit:     config.pageLimit,
 		DomainTimeout: max(config.httpTimeout, config.dnsTimeout) + time.Second,
 		SafeNetwork:   !config.allowPrivateNet, Logger: logger,
 	})
@@ -167,6 +170,7 @@ func runScan(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 	flags.IntVar(&config.concurrency, "concurrency", 10, "maximum domains scanned concurrently")
 	flags.DurationVar(&config.httpTimeout, "timeout", 8*time.Second, "HTTP timeout per domain")
 	flags.DurationVar(&config.dnsTimeout, "dns-timeout", 3*time.Second, "timeout per DNS record query")
+	flags.IntVar(&config.pageLimit, "pages", 1, "maximum same-host HTML pages per domain (1-5)")
 	flags.Var(&config.dnsServers, "dns-server", "custom DNS resolver IP[:port] (repeatable)")
 	flags.BoolVar(&config.evidence, "evidence", true, "include matching evidence")
 	flags.BoolVar(&config.verbose, "verbose", false, "enable verbose diagnostics on stderr")
@@ -183,12 +187,16 @@ Examples:
   technograph scan --input domains.txt --output results.json
   technograph scan stripe.com shopify.com --format table
   technograph scan --input domains.txt --format csv --output results.csv
-  printf 'stripe.com\nshopify.com\n' | technograph scan --format jsonl`)
+  printf 'stripe.com\nshopify.com\n' | technograph scan --format jsonl
+
+Multi-page scanning is opt-in. --pages follows at most four additional links
+from the final homepage, stays on its exact public host, and shares the domain's
+HTTP timeout. The default --pages 1 preserves homepage-only behavior.`)
 		return 0
 	}
 	normalized, err := intersperse(args, map[string]bool{
 		"format": true, "input": true, "output": true, "fingerprints": true,
-		"request-id": true, "concurrency": true, "timeout": true, "dns-timeout": true, "dns-server": true,
+		"request-id": true, "concurrency": true, "timeout": true, "dns-timeout": true, "dns-server": true, "pages": true,
 		"evidence": false, "verbose": false, "allow-private-network": false,
 	})
 	if err != nil || flags.Parse(normalized) != nil {
@@ -203,6 +211,10 @@ Examples:
 	}
 	if config.concurrency < 1 || config.httpTimeout <= 0 || config.dnsTimeout <= 0 {
 		fmt.Fprintln(stderr, "technograph: concurrency and timeouts must be positive")
+		return 2
+	}
+	if config.pageLimit < 1 || config.pageLimit > 5 {
+		fmt.Fprintln(stderr, "technograph: pages must be between 1 and 5")
 		return 2
 	}
 	inputs, err := collectInputs(flags.Args(), config.input, stdin)

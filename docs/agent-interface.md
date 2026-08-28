@@ -14,6 +14,7 @@ Scan direct arguments, stdin, or a file:
 ```console
 technograph scan stripe.com shopify.com --format json
 technograph explain stripe.com shopify.com
+technograph explain stripe.com --pages 3
 technograph scan stripe.com shopify.com --format table
 technograph scan --input domains.txt --format csv --output results.csv
 printf 'stripe.com\nshopify.com\n' | technograph scan --format jsonl
@@ -54,6 +55,21 @@ When available, `technology_categories` maps detected technology names to
 descriptive categories. This metadata cannot cause a detection. The same data
 appears in fingerprint inventory responses, table output, CSV, and human
 evidence reports.
+
+### Optional bounded page coverage
+
+`scan`, `explain`, and `watch` accept `--pages 1-5`. The default is `1`, so the
+original homepage-only behavior and output remain unchanged. Higher values
+follow a deterministic priority order for same-host links such as pricing,
+integrations, features, products, solutions, customers, about, and contact.
+
+Queries and fragments are removed for deduplication. Static-file extensions,
+credentials, non-HTTP schemes, nonstandard ports, external hosts, and
+cross-host redirects are rejected. All pages share the normal per-domain HTTP
+deadline. Secondary blocks and failures are typed as `http_page` issues and
+make an otherwise complete result `partial`; usable evidence is retained.
+The MCP server deliberately remains homepage-only to keep autonomous request
+cost and reach fixed.
 
 ## Validation and fingerprint discovery
 
@@ -98,7 +114,8 @@ technograph history stripe.com --store /absolute/history --limit 10
 ```
 
 First observations and scanner/fingerprint identity changes are returned as
-baselines, not additions/removals. `--fail-on-change` returns status 3 only for
+baselines, not additions/removals. Page-limit changes are included in the
+scanner compatibility identity. `--fail-on-change` returns status 3 only for
 confirmed changes and only after the JSON report and history are written.
 Uncertain removals remain data, not a notification exit. The schemas are
 `schemas/watch-report.schema.json` and `schemas/history-report.schema.json`.

@@ -91,6 +91,7 @@ appear before or after positional domains:
 ```console
 technograph scan stripe.com shopify.com --format json
 technograph explain stripe.com shopify.com
+technograph explain stripe.com --pages 3
 technograph scan stripe.com shopify.com --format table
 technograph scan --input domains.txt --format csv --output results.csv
 printf 'stripe.com\nshopify.com\n' | technograph scan --format jsonl
@@ -124,6 +125,14 @@ are structured separately from uncertain removals. `--fail-on-change` returns
 status 3 after writing the report, which lets an external scheduler send a
 notification without giving Technograph notification credentials. `history`
 reads those private local entries without network access.
+
+Homepage-only scanning remains the default. Local CLI users can opt into a
+small deterministic crawl with `--pages 2` through `--pages 5` on `scan`,
+`explain`, or `watch`. Secondary requests stay on the exact final homepage
+host, use only public HTTP(S) ports, skip static assets, share the original
+per-domain HTTP deadline, and never execute JavaScript. Evidence from an
+opt-in scan includes the page URL. A secondary failure makes the structured
+result partial but preserves valid homepage and DNS observations.
 
 The separate `technograph-mcp` binary serves four local stdio tools:
 `scan_domain`, `scan_domains`, `validate_domain`, and `list_fingerprints`.
@@ -172,11 +181,12 @@ The implementation is divided into small packages:
 - `internal/app` constructs the reusable scanner used by every interface.
 - `internal/agentapi` defines the versioned status, report, streaming, and diff
   contracts; `internal/agentcli` exposes them as structured subcommands.
-- `internal/probe` fetches homepages and performs exact MX, TXT, and apex CNAME
-  queries. HTTPS is preferred; HTTP fallback occurs only for transport/TLS
-  failures. DNS uses the system resolver configuration, nameserver failover,
-  UDP first, and TCP retry for truncated replies. Local CLI users may opt into
-  literal-IP resolvers; MCP always uses the host configuration.
+- `internal/probe` fetches homepages, optionally follows a bounded deterministic
+  set of same-host pages, and performs exact MX, TXT, and apex CNAME queries.
+  HTTPS is preferred; HTTP fallback occurs only for transport/TLS failures.
+  DNS uses the system resolver configuration, nameserver failover, UDP first,
+  and TCP retry for truncated replies. Local CLI users may opt into literal-IP
+  resolvers; MCP always uses the host configuration.
 - `internal/extract` produces structured signals from final response headers,
   cookie names/values, raw HTML, script URLs and bounded inline source, meta
   fields, and static `window.*` syntax. Relative script URLs are resolved
@@ -260,8 +270,8 @@ assignment set stays embedded by default.
 
 The scanner implements static HTTP/DNS channels only. Runtime DOM inspection,
 executed JavaScript globals, XHR observation, TLS certificates, robots files,
-and secondary-page crawling are outside scope. Public pages and DNS records
-also change over time, so real results are observations, not permanent facts.
+and unbounded crawling are outside scope. Public pages and DNS records also
+change over time, so real results are observations, not permanent facts.
 
 ## Testing
 
@@ -278,7 +288,9 @@ wrong-channel negatives, structured extraction, redirects, TLS/HTTP fallback,
 compression, body limits, challenge suppression, DNS normalization and TCP
 retry, bounded and completion-order concurrency, deterministic legacy JSON,
 typed agent output, conservative diffs, SSRF address policy, atomic output, and
-an in-memory MCP client/server integration test.
+an in-memory MCP client/server integration test. Opt-in page coverage tests
+also enforce deterministic ordering, deduplication, static-file exclusion,
+default compatibility, and cross-host redirect rejection.
 
 ## Included real scan
 

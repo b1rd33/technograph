@@ -26,6 +26,7 @@ func runExplain(ctx context.Context, args []string, stdin io.Reader, stdout, std
 	flags.IntVar(&config.concurrency, "concurrency", 10, "maximum domains scanned concurrently")
 	flags.DurationVar(&config.httpTimeout, "timeout", 8*time.Second, "HTTP timeout per domain")
 	flags.DurationVar(&config.dnsTimeout, "dns-timeout", 3*time.Second, "timeout per DNS record query")
+	flags.IntVar(&config.pageLimit, "pages", 1, "maximum same-host HTML pages per domain (1-5)")
 	flags.Var(&config.dnsServers, "dns-server", "custom DNS resolver IP[:port] (repeatable)")
 	flags.BoolVar(&config.verbose, "verbose", false, "enable verbose diagnostics on stderr")
 	flags.BoolVar(&config.allowPrivateNet, "allow-private-network", false, "disable autonomous SSRF protection for this local invocation")
@@ -39,13 +40,14 @@ input is read from stdin.
 Examples:
   technograph explain stripe.com
   technograph explain stripe.com shopify.com
+  technograph explain stripe.com --pages 3
   technograph explain --input domains.txt
   technograph explain --input domains.txt --output evidence-report.txt`)
 		return 0
 	}
 	normalized, err := intersperse(args, map[string]bool{
 		"input": true, "output": true, "fingerprints": true,
-		"concurrency": true, "timeout": true, "dns-timeout": true, "dns-server": true,
+		"concurrency": true, "timeout": true, "dns-timeout": true, "dns-server": true, "pages": true,
 		"verbose": false, "allow-private-network": false,
 	})
 	if err != nil || flags.Parse(normalized) != nil {
@@ -56,6 +58,10 @@ Examples:
 	}
 	if config.concurrency < 1 || config.httpTimeout <= 0 || config.dnsTimeout <= 0 {
 		fmt.Fprintln(stderr, "technograph: concurrency and timeouts must be positive")
+		return 2
+	}
+	if config.pageLimit < 1 || config.pageLimit > 5 {
+		fmt.Fprintln(stderr, "technograph: pages must be between 1 and 5")
 		return 2
 	}
 	inputs, err := collectInputs(flags.Args(), config.input, stdin)
@@ -141,7 +147,11 @@ func renderTechnologies(buffer *bytes.Buffer, result agentapi.DomainResult) {
 				selector = " " + strconv.Quote(safeText(item.Selector))
 			}
 			fmt.Fprintf(buffer, "      - %s%s matched %s\n", channelLabel(item.Channel), selector, strconv.Quote(safeText(item.Matched)))
-			fmt.Fprintf(buffer, "        Source: %s; confidence: %d\n", safeText(item.Origin), item.Confidence)
+			source := safeText(item.Origin)
+			if item.PageURL != "" {
+				source += " at " + safeText(item.PageURL)
+			}
+			fmt.Fprintf(buffer, "        Source: %s; confidence: %d\n", source, item.Confidence)
 		}
 	}
 }
@@ -162,6 +172,22 @@ func renderCoverage(buffer *bytes.Buffer, result agentapi.DomainResult) {
 				fmt.Fprint(buffer, " [blocked]")
 			}
 			fmt.Fprintln(buffer)
+		}
+		if result.HTTP.PageCount > 1 {
+			fmt.Fprintf(buffer, "  Pages: %d total (%d secondary)\n", result.HTTP.PageCount, len(result.HTTP.Pages))
+			for _, page := range result.HTTP.Pages {
+				status := strconv.Itoa(page.StatusCode)
+				if page.Error != "" {
+					status = "error"
+				} else if page.Blocked {
+					status += ", blocked"
+				}
+				address := page.FinalURL
+				if address == "" {
+					address = page.RequestedURL
+				}
+				fmt.Fprintf(buffer, "    - %s [%s]\n", safeText(address), status)
+			}
 		}
 	}
 	if result.DNS != nil && len(result.DNS.Status) > 0 {

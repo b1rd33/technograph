@@ -21,6 +21,15 @@ func (stubDNS) Probe(context.Context, string) (model.DNSResult, []model.Signal) 
 	return model.DNSResult{Status: map[string]string{"mx": "nodata", "txt": "nodata", "cname": "nodata"}}, nil
 }
 
+type secondaryFailureHTTP struct{}
+
+func (secondaryFailureHTTP) Probe(context.Context, string) (model.HTTPResult, []model.Signal) {
+	return model.HTTPResult{
+		StatusCode: 200, PageCount: 2,
+		Pages: []model.HTTPPageResult{{RequestedURL: "https://example.com/pricing", Error: "timeout"}},
+	}, nil
+}
+
 func testRunner(t *testing.T) Runner {
 	t.Helper()
 	service, _, err := app.New(app.Options{
@@ -55,6 +64,25 @@ func TestRunnerCapsAutonomousBatchSize(t *testing.T) {
 	runner.MaxDomains = 1
 	if _, err := runner.Scan(context.Background(), "", []string{"example.com", "example.org"}); err == nil {
 		t.Fatal("expected maximum-domain error")
+	}
+}
+
+func TestRunnerReportsSecondaryPageFailureAsPartial(t *testing.T) {
+	service, _, err := app.New(app.Options{
+		FingerprintData: []byte(`{"schema_version":1,"technologies":{"Cloudflare":{"header":"cf-ray"}}}`),
+		HTTP: secondaryFailureHTTP{}, DNS: stubDNS{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(service.Close)
+	report, err := (Runner{Service: service}).Scan(context.Background(), "pages", []string{"example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := report.Results[0]
+	if result.Status != StatusPartial || len(result.Errors) != 1 || result.Errors[0].Code != "PAGE_FETCH_FAILED" {
+		t.Fatalf("result = %#v", result)
 	}
 }
 

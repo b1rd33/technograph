@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.7.0 — 2026-08-28
+
+- Add opt-in `--pages 1-5` coverage to `scan`, `explain`, and `watch` while
+  preserving homepage-only behavior by default and in the assignment CLI/MCP.
+- Follow a deterministic set of useful same-host public HTML links within the
+  existing per-domain HTTP deadline; strip query/fragment duplicates and skip
+  static assets, nonstandard ports, credentials, and cross-host redirects.
+- Attribute matching evidence to its page URL and report secondary page
+  coverage, blocks, truncation, and failures without discarding homepage/DNS
+  evidence.
+- Include page coverage in watch compatibility identity so changing `--pages`
+  establishes a new baseline instead of a false technology change.
+
 ## v0.6.0 — 2026-08-28
 
 - Add one-shot `watch` scans backed by immutable private local observations and
