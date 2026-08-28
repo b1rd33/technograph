@@ -1,9 +1,12 @@
 # Changelog
 
-## Unreleased
+## v0.3.0 — 2026-08-28
 
 - Add `technograph explain` for deterministic human-readable technology
   evidence, HTTP/DNS coverage, and partial or blocked scan diagnostics.
+- Support the same direct-domain, stdin, file, network-policy, timeout, and
+  atomic output controls as the structured scanner.
+- Escape terminal control characters in all network-derived report text.
 
 ## v0.2.2 — 2026-08-27
 

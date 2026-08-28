@@ -3,7 +3,9 @@ package agentcli
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -101,12 +103,8 @@ func TestRenderExplanationRemovesTerminalControlCharacters(t *testing.T) {
 }
 
 func TestExplainReportsInvalidInputWithoutNetworkAccess(t *testing.T) {
-	bundled, err := os.ReadFile("../../fingerprints.json")
-	if err != nil {
-		t.Fatal(err)
-	}
 	var stdout, stderr bytes.Buffer
-	code := Run(context.Background(), []string{"explain", "https://example.com"}, strings.NewReader(""), &stdout, &stderr, bundled)
+	code := Run(context.Background(), []string{"explain", "https://example.com"}, strings.NewReader(""), &stdout, &stderr, assignmentFingerprints(t))
 	if code != 0 {
 		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
 	}
@@ -114,4 +112,77 @@ func TestExplainReportsInvalidInputWithoutNetworkAccess(t *testing.T) {
 		!strings.Contains(stdout.String(), "error INVALID_DOMAIN") {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
+}
+
+func TestExplainReadsStdinAndWritesOutputFile(t *testing.T) {
+	outputPath := filepath.Join(t.TempDir(), "report.txt")
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"explain", "--output", outputPath,
+	}, strings.NewReader("# comment\nhttps://invalid.example\n"), &stdout, &stderr, assignmentFingerprints(t))
+	if code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty when writing a file", stdout.String())
+	}
+	data, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(data, []byte("https://invalid.example  [INVALID]")) {
+		t.Fatalf("report = %q", data)
+	}
+}
+
+func TestExplainAcceptsInterspersedFlags(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"explain", "https://invalid.example", "--output=-",
+	}, strings.NewReader(""), &stdout, &stderr, assignmentFingerprints(t))
+	if code != 0 || !strings.Contains(stdout.String(), "[INVALID]") {
+		t.Fatalf("code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+	}
+}
+
+func TestExplainRejectsInvalidRuntimeConfiguration(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"explain", "--timeout=0", "example.com",
+	}, strings.NewReader(""), &stdout, &stderr, assignmentFingerprints(t))
+	if code != 2 || !strings.Contains(stderr.String(), "must be positive") {
+		t.Fatalf("code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+	}
+}
+
+func TestExplainEnforcesDomainLimit(t *testing.T) {
+	arguments := []string{"explain"}
+	for index := 0; index < agentapi.DefaultMaxDomains+1; index++ {
+		arguments = append(arguments, fmt.Sprintf("invalid-%d.example", index))
+	}
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), arguments, strings.NewReader(""), &stdout, &stderr, assignmentFingerprints(t))
+	if code != 1 || !strings.Contains(stderr.String(), "too many domains") {
+		t.Fatalf("code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+	}
+}
+
+func TestExplainReportsOutputFailure(t *testing.T) {
+	outputPath := filepath.Join(t.TempDir(), "missing", "report.txt")
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"explain", "https://invalid.example", "--output", outputPath,
+	}, strings.NewReader(""), &stdout, &stderr, assignmentFingerprints(t))
+	if code != 1 || !strings.Contains(stderr.String(), "create temporary output") {
+		t.Fatalf("code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+	}
+}
+
+func assignmentFingerprints(t *testing.T) []byte {
+	t.Helper()
+	data, err := os.ReadFile("../../fingerprints.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }
