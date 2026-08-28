@@ -84,7 +84,7 @@ func (runner Runner) Scan(ctx context.Context, requestID string, inputs []string
 		scanned := runner.Service.Scan(ctx, validDomains)
 		for index, result := range scanned {
 			original := validIndexes[index]
-			results[original] = convertResult(original, prepared[original].input, result)
+			results[original] = runner.convertResult(original, prepared[original].input, result)
 		}
 	}
 	return Report{
@@ -116,7 +116,7 @@ func (runner Runner) ScanStream(ctx context.Context, requestID string, inputs []
 		}
 		for completed := range runner.Service.ScanStream(ctx, validDomains) {
 			original := validIndexes[completed.Index]
-			results <- convertResult(original, prepared[original].input, completed.Result)
+			results <- runner.convertResult(original, prepared[original].input, completed.Result)
 		}
 	}()
 	return requestID, results, nil
@@ -138,13 +138,14 @@ func validationResult(item preparedInput) DomainResult {
 	return result
 }
 
-func convertResult(index int, input string, scanned model.ScanResult) DomainResult {
+func (runner Runner) convertResult(index int, input string, scanned model.ScanResult) DomainResult {
 	result := DomainResult{
 		InputIndex: index, Input: input, Domain: scanned.Domain.Hostname, Apex: scanned.Domain.Apex,
 		Status: StatusOK, Technologies: nonNil(scanned.Technologies), Evidence: scanned.Evidence,
 		HTTP: &scanned.HTTP, DNS: &scanned.DNS, Warnings: []Issue{}, Errors: []Issue{},
 		ElapsedMS: scanned.ElapsedMS,
 	}
+	result.TechnologyCategories = runner.Service.CategoriesFor(result.Technologies)
 	if scanned.HTTP.BodyTruncated {
 		result.Warnings = append(result.Warnings, Issue{Code: "BODY_TRUNCATED", Message: "response body exceeded the configured limit", Channel: "http"})
 	}

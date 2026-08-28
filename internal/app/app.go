@@ -25,6 +25,7 @@ type Options struct {
 	Concurrency        int
 	HTTPTimeout        time.Duration
 	DNSTimeout         time.Duration
+	DNSServers         []string
 	DomainTimeout      time.Duration
 	InsecureTLS        bool
 	SafeNetwork        bool
@@ -70,7 +71,15 @@ func New(options Options) (*Service, []fingerprint.Warning, error) {
 
 	dnsProber := options.DNS
 	if dnsProber == nil {
-		dnsProber, err = probe.NewSystemDNSProbe(options.DNSTimeout, options.Logger)
+		if len(options.DNSServers) > 0 {
+			var servers []string
+			servers, err = probe.NormalizeDNSServers(options.DNSServers)
+			if err == nil {
+				dnsProber, err = probe.NewDNSProbe(probe.DNSOptions{Servers: servers, Timeout: options.DNSTimeout, Logger: options.Logger})
+			}
+		} else {
+			dnsProber, err = probe.NewSystemDNSProbe(options.DNSTimeout, options.Logger)
+		}
 		if err != nil {
 			closeHTTP()
 			return nil, warnings, fmt.Errorf("configure DNS probe: %w", err)
@@ -99,6 +108,17 @@ func New(options Options) (*Service, []fingerprint.Warning, error) {
 // Fingerprints returns the compiled fingerprint inventory.
 func (service *Service) Fingerprints() []fingerprint.Descriptor {
 	return service.database.Descriptors()
+}
+
+// CategoriesFor returns category metadata for detected technologies.
+func (service *Service) CategoriesFor(technologies []string) map[string][]string {
+	output := make(map[string][]string)
+	for _, technology := range technologies {
+		if categories := service.database.Categories(technology); len(categories) > 0 {
+			output[technology] = categories
+		}
+	}
+	return output
 }
 
 // Scan processes validated domains while preserving their input order.

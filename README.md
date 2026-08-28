@@ -4,10 +4,11 @@ Technograph is a conservative, HTTP-only technographic detection CLI and local
 MCP server. It reads company domains, observes their public homepage and apex
 DNS records, and matches those signals against Wappalyzer-style fingerprints.
 
-The original technical-home-assignment interface is preserved unchanged. v0.2
-adds a versioned JSON/JSONL interface, typed partial-failure states,
-snapshot comparison, SSRF protection for autonomous callers, and a separate
-stdio MCP binary. The immutable assignment submission is tagged `v0.1.0`.
+The original technical-home-assignment interface is preserved unchanged.
+Later releases add versioned machine output, human and spreadsheet views,
+typed partial-failure states, snapshot comparison, SSRF protection for
+autonomous callers, and a separate stdio MCP binary. The immutable assignment
+submission is tagged `v0.1.0`.
 
 It does not execute JavaScript, use a headless browser, call a paid API, or try
 to bypass bot protection.
@@ -73,6 +74,7 @@ Available options:
 | `-concurrency` | `10` | Maximum domains scanned simultaneously |
 | `-timeout` | `8s` | HTTP request deadline per domain |
 | `-dns-timeout` | `3s` | Deadline per DNS record query |
+| `-dns-server` | system | Custom resolver IP and optional port; repeatable |
 | `-fingerprints` | embedded | External normalized fingerprint file |
 | `-insecure` | false | Explicitly disable TLS verification |
 | `-verbose` | false | Show DNS and soft-block diagnostics |
@@ -89,6 +91,8 @@ appear before or after positional domains:
 ```console
 technograph scan stripe.com shopify.com --format json
 technograph explain stripe.com shopify.com
+technograph scan stripe.com shopify.com --format table
+technograph scan --input domains.txt --format csv --output results.csv
 printf 'stripe.com\nshopify.com\n' | technograph scan --format jsonl
 technograph scan --input domains.txt --output snapshot.json
 technograph validate example.com https://invalid.example
@@ -99,7 +103,12 @@ technograph compare before.json after.json --output diff.json
 JSON output uses schema version `1.0` and gives every input an `ok`, `partial`,
 `blocked`, `failed`, or `invalid` status plus typed warnings/errors. JSONL emits
 domain results in actual completion order. Logs stay on stderr, so stdout is
-safe to pipe into agents and automation.
+safe to pipe into agents and automation. `table` is a compact terminal summary;
+`csv` emits one spreadsheet-safe row per domain. Both preserve input order.
+
+Detections include optional `technology_categories` metadata such as Payments,
+Analytics, CRM, or CDN. Categories describe the technology; they never create
+a detection and therefore do not change the conservative matching behavior.
 
 `technograph explain` runs the same evidence-based scan but formats the result
 for people: detections are grouped with their matching channel and source,
@@ -154,7 +163,8 @@ The implementation is divided into small packages:
 - `internal/probe` fetches homepages and performs exact MX, TXT, and apex CNAME
   queries. HTTPS is preferred; HTTP fallback occurs only for transport/TLS
   failures. DNS uses the system resolver configuration, nameserver failover,
-  UDP first, and TCP retry for truncated replies.
+  UDP first, and TCP retry for truncated replies. Local CLI users may opt into
+  literal-IP resolvers; MCP always uses the host configuration.
 - `internal/extract` produces structured signals from final response headers,
   cookie names/values, raw HTML, script URLs and bounded inline source, meta
   fields, and static `window.*` syntax. Relative script URLs are resolved
@@ -179,7 +189,8 @@ Wappalyzer normally uses exact names as selectors and applies regexes to their
 values. Every rule therefore has an explicit `channel`, `regex`, and optional
 `target` (`name` or `value`). A technology is detected when any of its patterns
 matches a signal in the same channel. Evidence and technology names are
-deduplicated.
+deduplicated. Optional category metadata is loaded generically from the same
+fingerprint definition.
 
 ## Accuracy and block handling
 
@@ -208,6 +219,11 @@ only ports 80/443, and ignores proxy environment variables. A clearly named
 `--allow-private-network` escape hatch exists for trusted local CLI testing;
 it is deliberately unavailable through MCP. MCP also caps each request and
 global active work at 20 domains and accepts only embedded fingerprints.
+
+Local CLI users may opt into a resolver with repeatable `--dns-server
+IP[:port]` flags (or `-dns-server` in legacy mode). Literal IPv4/IPv6 addresses
+are required. Custom resolvers should be treated as parties that can observe
+queried domains.
 
 ## Fingerprint compatibility
 

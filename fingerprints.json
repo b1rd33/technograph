@@ -2,6 +2,7 @@
   "schema_version": 1,
   "technologies": {
     "HubSpot": {
+      "categories": ["Marketing automation"],
       "patterns": [
         { "channel": "script", "regex": "//js\\.hs-scripts\\.com/" },
         { "channel": "script", "regex": "//js\\.hsforms\\.net/" },
@@ -9,86 +10,100 @@
       ]
     },
     "Stripe": {
+      "categories": ["Payments"],
       "patterns": [
         { "channel": "script", "regex": "js\\.stripe\\.com/v3" },
         { "channel": "header", "regex": "X-Stripe-.*" }
       ]
     },
     "Google Analytics 4": {
+      "categories": ["Analytics"],
       "patterns": [
         { "channel": "script", "regex": "google-analytics\\.com/g/collect" },
         { "channel": "script", "regex": "gtag\\(" }
       ]
     },
     "Intercom": {
+      "categories": ["Customer support"],
       "patterns": [
         { "channel": "script", "regex": "widget\\.intercom\\.io/" },
         { "channel": "cookie", "regex": "^intercom-" }
       ]
     },
     "Cloudflare": {
+      "categories": ["CDN"],
       "patterns": [
         { "channel": "header", "regex": "cf-ray" },
         { "channel": "header", "regex": "cf-cache-status" }
       ]
     },
     "WordPress": {
+      "categories": ["CMS"],
       "patterns": [
         { "channel": "html", "regex": "/wp-content/" },
         { "channel": "html", "regex": "/wp-includes/" }
       ]
     },
     "Shopify": {
+      "categories": ["Ecommerce"],
       "patterns": [
         { "channel": "html", "regex": "cdn\\.shopify\\.com" },
         { "channel": "header", "regex": "X-ShopId" }
       ]
     },
     "SendGrid": {
+      "categories": ["Transactional email"],
       "patterns": [
         { "channel": "dns_txt", "regex": "sendgrid\\.net" }
       ]
     },
     "Salesforce": {
+      "categories": ["CRM"],
       "patterns": [
         { "channel": "dns_cname", "regex": "\\.salesforce\\.com" }
       ]
     },
     "Google Workspace": {
+      "categories": ["Email"],
       "patterns": [
         { "channel": "dns_mx", "regex": "google\\.com" }
       ]
     },
     "Microsoft 365": {
+      "categories": ["Email"],
       "patterns": [
         { "channel": "dns_mx", "regex": "protection\\.outlook\\.com" }
       ]
     },
     "Zendesk": {
+      "categories": ["Customer support"],
       "patterns": [
         { "channel": "script", "regex": "static\\.zdassets\\.com" }
       ]
     },
     "Drift": {
+      "categories": ["Conversational marketing"],
       "patterns": [
         { "channel": "script", "regex": "js\\.driftt\\.com" }
       ]
     },
     "Segment": {
+      "categories": ["Customer data platform"],
       "patterns": [
         { "channel": "script", "regex": "cdn\\.segment\\.com/analytics\\.js" }
       ]
     },
     "Sentry": {
+      "categories": ["Error monitoring"],
       "patterns": [
         { "channel": "script", "regex": "browser\\.sentry-cdn\\.com" }
       ]
     },
     "Hotjar": {
+      "categories": ["Analytics"],
       "patterns": [
         { "channel": "script", "regex": "static\\.hotjar\\.com" }
       ]
     }
   }
 }
-

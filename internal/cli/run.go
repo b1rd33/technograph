@@ -22,6 +22,11 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, bundledFi
 	concurrency := flags.Int("concurrency", 10, "maximum domains scanned concurrently")
 	httpTimeout := flags.Duration("timeout", 8*time.Second, "HTTP timeout per domain")
 	dnsTimeout := flags.Duration("dns-timeout", 3*time.Second, "timeout per DNS record query")
+	var dnsServers []string
+	flags.Func("dns-server", "custom DNS resolver IP[:port] (repeatable)", func(value string) error {
+		dnsServers = append(dnsServers, value)
+		return nil
+	})
 	fingerprintPath := flags.String("fingerprints", "", "external normalized fingerprint JSON")
 	reportPath := flags.String("report", "", "optional detailed evidence report path")
 	insecure := flags.Bool("insecure", false, "disable TLS certificate verification")
@@ -83,6 +88,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, bundledFi
 	service, warnings, err := app.New(app.Options{
 		FingerprintData: fingerprintData, StrictFingerprints: strict,
 		Concurrency: *concurrency, HTTPTimeout: *httpTimeout, DNSTimeout: *dnsTimeout,
+		DNSServers:    dnsServers,
 		DomainTimeout: max(*httpTimeout, *dnsTimeout) + time.Second,
 		InsecureTLS:   *insecure, Logger: logger,
 	})

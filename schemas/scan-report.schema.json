@@ -36,6 +36,10 @@
         "apex": { "type": "string" },
         "status": { "enum": ["ok", "partial", "blocked", "failed", "invalid"] },
         "technologies": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "technology_categories": {
+          "type": "object",
+          "additionalProperties": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+        },
         "evidence": { "type": "array", "items": { "type": "object" } },
         "http": { "type": "object" },
         "dns": { "type": "object" },

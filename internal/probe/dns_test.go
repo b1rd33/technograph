@@ -12,6 +12,26 @@ import (
 	"github.com/miekg/dns"
 )
 
+func TestNormalizeDNSServers(t *testing.T) {
+	t.Parallel()
+	servers, err := NormalizeDNSServers([]string{"1.1.1.1", "[2606:4700:4700::1111]:5353", "1.1.1.1:53"})
+	if err != nil {
+		t.Fatalf("NormalizeDNSServers: %v", err)
+	}
+	if got, want := strings.Join(servers, "|"), "1.1.1.1:53|[2606:4700:4700::1111]:5353"; got != want {
+		t.Fatalf("servers = %q, want %q", got, want)
+	}
+}
+
+func TestNormalizeDNSServersRejectsAmbiguousValues(t *testing.T) {
+	t.Parallel()
+	for _, value := range []string{"", "resolver.example", "1.1.1.1:0", "1.1.1.1:70000", "[not-an-ip]:53"} {
+		if _, err := NormalizeDNSServers([]string{value}); err == nil {
+			t.Fatalf("NormalizeDNSServers(%q) succeeded", value)
+		}
+	}
+}
+
 func TestDNSProbeCollectsAndNormalizesRecords(t *testing.T) {
 	t.Parallel()
 	exchanger := exchangeFunc(func(_ context.Context, message *dns.Msg, _ string) (*dns.Msg, time.Duration, error) {

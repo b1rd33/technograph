@@ -14,6 +14,8 @@ Scan direct arguments, stdin, or a file:
 ```console
 technograph scan stripe.com shopify.com --format json
 technograph explain stripe.com shopify.com
+technograph scan stripe.com shopify.com --format table
+technograph scan --input domains.txt --format csv --output results.csv
 printf 'stripe.com\nshopify.com\n' | technograph scan --format jsonl
 technograph scan --input domains.txt --output snapshot.json
 ```
@@ -21,7 +23,9 @@ technograph scan --input domains.txt --output snapshot.json
 `technograph explain` runs the same scanner and presents its typed status,
 technology evidence, HTTP/DNS coverage, and issues as deterministic plain text.
 It is intended for terminal exploration and live reviews; automation should
-continue to consume the versioned JSON or JSONL interfaces.
+continue to consume the versioned JSON or JSONL interfaces. Table is a bounded
+terminal overview. CSV emits one input-ordered row per domain and guards cells
+against spreadsheet formula injection.
 
 Flags may appear before or after domains. JSON is written to stdout by default;
 all logs and warnings use stderr. `--output -` also means stdout. JSONL emits a
@@ -45,6 +49,11 @@ The stable schema is `1.0`; see `schemas/scan-report.schema.json`. A
 fingerprint's confidence directive is included only in its matching evidence.
 Technograph deliberately does not invent a combined technology confidence
 score.
+
+When available, `technology_categories` maps detected technology names to
+descriptive categories. This metadata cannot cause a detection. The same data
+appears in fingerprint inventory responses, table output, CSV, and human
+evidence reports.
 
 ## Validation and fingerprint discovery
 
@@ -107,6 +116,12 @@ rebinding paths. Host headers and TLS SNI retain the original public hostname.
 The structured CLI applies the same network policy by default. Its explicit
 `--allow-private-network` option exists only for trusted local testing and is
 not available through MCP.
+
+For local operational testing, `scan` and `explain` accept repeatable
+`--dns-server IP[:port]` options. Literal resolver IP addresses are required;
+omitting the port uses 53. The setting is intentionally absent from MCP so an
+agent cannot redirect DNS traffic or silently change the scanner's trust
+boundary.
 
 Technograph v0.2 intentionally ships local stdio MCP only. A public remote MCP
 service would require authentication, tenant isolation, quotas, rate limits,

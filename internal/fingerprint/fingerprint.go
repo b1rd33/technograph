@@ -49,7 +49,8 @@ type rawFile struct {
 }
 
 type rawTechnology struct {
-	Patterns []rawPattern `json:"patterns"`
+	Patterns   []rawPattern `json:"patterns"`
+	Categories []string     `json:"categories,omitempty"`
 }
 
 // UnmarshalJSON accepts the explicit normalized pattern list used by the
@@ -64,9 +65,21 @@ func (technology *rawTechnology) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("decode patterns: %w", err)
 		}
 	}
+	if categories, ok := fields["categories"]; ok {
+		if err := json.Unmarshal(categories, &technology.Categories); err != nil {
+			return fmt.Errorf("decode categories: %w", err)
+		}
+	}
+	if category, ok := fields["category"]; ok {
+		var value string
+		if err := json.Unmarshal(category, &value); err != nil {
+			return fmt.Errorf("decode category: %w", err)
+		}
+		technology.Categories = append(technology.Categories, value)
+	}
 	keys := make([]string, 0, len(fields))
 	for key := range fields {
-		if key != "patterns" {
+		if key != "patterns" && key != "category" && key != "categories" {
 			keys = append(keys, key)
 		}
 	}
@@ -99,8 +112,9 @@ type rawPattern struct {
 
 // Database is an immutable channel-indexed fingerprint set.
 type Database struct {
-	byChannel map[model.Channel][]Pattern
-	count     int
+	byChannel  map[model.Channel][]Pattern
+	categories map[string][]string
+	count      int
 }
 
 // Descriptor is the stable, serializable view of one compiled fingerprint.
@@ -110,6 +124,7 @@ type Descriptor struct {
 	Target     model.Part    `json:"target"`
 	Pattern    string        `json:"pattern"`
 	Confidence int           `json:"confidence"`
+	Categories []string      `json:"categories,omitempty"`
 }
 
 // Count returns the number of compiled patterns.
@@ -125,6 +140,7 @@ func (database *Database) Descriptors() []Descriptor {
 			descriptors = append(descriptors, Descriptor{
 				Technology: pattern.Technology, Channel: pattern.Channel,
 				Target: pattern.Target, Pattern: pattern.Source, Confidence: pattern.Confidence,
+				Categories: append([]string(nil), database.categories[pattern.Technology]...),
 			})
 		}
 	}
@@ -138,6 +154,11 @@ func (database *Database) Descriptors() []Descriptor {
 		return descriptors[i].Pattern < descriptors[j].Pattern
 	})
 	return descriptors
+}
+
+// Categories returns stable category metadata for a technology.
+func (database *Database) Categories(technology string) []string {
+	return append([]string(nil), database.categories[technology]...)
 }
 
 // Load parses and compiles a normalized fingerprint file. Strict mode is used
@@ -155,7 +176,7 @@ func Load(data []byte, strict bool) (*Database, []Warning, error) {
 		return nil, nil, errors.New("fingerprint database contains no technologies")
 	}
 
-	database := &Database{byChannel: make(map[model.Channel][]Pattern)}
+	database := &Database{byChannel: make(map[model.Channel][]Pattern), categories: make(map[string][]string)}
 	warnings := make([]Warning, 0)
 	technologyNames := make([]string, 0, len(source.Technologies))
 	for technology := range source.Technologies {
@@ -165,6 +186,11 @@ func Load(data []byte, strict bool) (*Database, []Warning, error) {
 
 	for _, technology := range technologyNames {
 		definition := source.Technologies[technology]
+		categories, err := normalizeCategories(definition.Categories)
+		if err != nil {
+			return nil, nil, fmt.Errorf("technology %q: %w", technology, err)
+		}
+		database.categories[technology] = categories
 		if len(definition.Patterns) == 0 {
 			return nil, nil, fmt.Errorf("technology %q contains no patterns", technology)
 		}
@@ -205,6 +231,24 @@ func Load(data []byte, strict bool) (*Database, []Warning, error) {
 		return nil, warnings, errors.New("fingerprint database contains no compilable patterns")
 	}
 	return database, warnings, nil
+}
+
+func normalizeCategories(values []string) ([]string, error) {
+	seen := make(map[string]struct{}, len(values))
+	output := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return nil, errors.New("category cannot be empty")
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		output = append(output, value)
+	}
+	sort.Strings(output)
+	return output, nil
 }
 
 func parseTarget(raw string, channel model.Channel) (model.Part, error) {

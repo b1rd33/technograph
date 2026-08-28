@@ -26,6 +26,7 @@ func runExplain(ctx context.Context, args []string, stdin io.Reader, stdout, std
 	flags.IntVar(&config.concurrency, "concurrency", 10, "maximum domains scanned concurrently")
 	flags.DurationVar(&config.httpTimeout, "timeout", 8*time.Second, "HTTP timeout per domain")
 	flags.DurationVar(&config.dnsTimeout, "dns-timeout", 3*time.Second, "timeout per DNS record query")
+	flags.Var(&config.dnsServers, "dns-server", "custom DNS resolver IP[:port] (repeatable)")
 	flags.BoolVar(&config.verbose, "verbose", false, "enable verbose diagnostics on stderr")
 	flags.BoolVar(&config.allowPrivateNet, "allow-private-network", false, "disable autonomous SSRF protection for this local invocation")
 	if wantsHelp(args) {
@@ -44,7 +45,7 @@ Examples:
 	}
 	normalized, err := intersperse(args, map[string]bool{
 		"input": true, "output": true, "fingerprints": true,
-		"concurrency": true, "timeout": true, "dns-timeout": true,
+		"concurrency": true, "timeout": true, "dns-timeout": true, "dns-server": true,
 		"verbose": false, "allow-private-network": false,
 	})
 	if err != nil || flags.Parse(normalized) != nil {
@@ -123,7 +124,11 @@ func renderTechnologies(buffer *bytes.Buffer, result agentapi.DomainResult) {
 		return evidence[left].Matched < evidence[right].Matched
 	})
 	for _, technology := range technologies {
-		fmt.Fprintf(buffer, "    %s\n", safeText(technology))
+		label := safeText(technology)
+		if categories := result.TechnologyCategories[technology]; len(categories) > 0 {
+			label += " [" + safeText(strings.Join(categories, ", ")) + "]"
+		}
+		fmt.Fprintf(buffer, "    %s\n", label)
 		for _, item := range evidence {
 			if item.Technology != technology {
 				continue

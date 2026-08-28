@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +35,49 @@ type DNSProbe struct {
 	udp     dnsExchanger
 	tcp     dnsExchanger
 	logger  *slog.Logger
+}
+
+// NormalizeDNSServers validates opt-in resolver addresses and supplies the
+// standard DNS port when omitted. Resolver hostnames are intentionally not
+// accepted because resolving a resolver would depend on another resolver.
+func NormalizeDNSServers(values []string) ([]string, error) {
+	servers := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return nil, errors.New("DNS resolver cannot be empty")
+		}
+		var host, port string
+		if ip := net.ParseIP(value); ip != nil {
+			host, port = ip.String(), "53"
+		} else {
+			var err error
+			host, port, err = net.SplitHostPort(value)
+			if err != nil {
+				return nil, fmt.Errorf("invalid DNS resolver %q: use an IP address with an optional port", value)
+			}
+			ip := net.ParseIP(host)
+			if ip == nil {
+				return nil, fmt.Errorf("invalid DNS resolver %q: host must be an IP address", value)
+			}
+			host = ip.String()
+		}
+		portNumber, err := strconv.Atoi(port)
+		if err != nil || portNumber < 1 || portNumber > 65535 {
+			return nil, fmt.Errorf("invalid DNS resolver %q: port must be between 1 and 65535", value)
+		}
+		normalized := net.JoinHostPort(host, strconv.Itoa(portNumber))
+		if _, exists := seen[normalized]; exists {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		servers = append(servers, normalized)
+	}
+	if len(servers) == 0 {
+		return nil, errors.New("DNS resolver has no nameservers")
+	}
+	return servers, nil
 }
 
 // NewSystemDNSProbe reads resolver settings from resolv.conf. This is supported

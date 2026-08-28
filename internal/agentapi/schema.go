@@ -26,18 +26,19 @@ type Issue struct {
 }
 
 type DomainResult struct {
-	InputIndex   int               `json:"input_index"`
-	Input        string            `json:"input"`
-	Domain       string            `json:"domain,omitempty"`
-	Apex         string            `json:"apex,omitempty"`
-	Status       Status            `json:"status"`
-	Technologies []string          `json:"technologies"`
-	Evidence     []model.Evidence  `json:"evidence,omitempty"`
-	HTTP         *model.HTTPResult `json:"http,omitempty"`
-	DNS          *model.DNSResult  `json:"dns,omitempty"`
-	Warnings     []Issue           `json:"warnings"`
-	Errors       []Issue           `json:"errors"`
-	ElapsedMS    int64             `json:"elapsed_ms"`
+	InputIndex           int                 `json:"input_index"`
+	Input                string              `json:"input"`
+	Domain               string              `json:"domain,omitempty"`
+	Apex                 string              `json:"apex,omitempty"`
+	Status               Status              `json:"status"`
+	Technologies         []string            `json:"technologies"`
+	TechnologyCategories map[string][]string `json:"technology_categories,omitempty"`
+	Evidence             []model.Evidence    `json:"evidence,omitempty"`
+	HTTP                 *model.HTTPResult   `json:"http,omitempty"`
+	DNS                  *model.DNSResult    `json:"dns,omitempty"`
+	Warnings             []Issue             `json:"warnings"`
+	Errors               []Issue             `json:"errors"`
+	ElapsedMS            int64               `json:"elapsed_ms"`
 }
 
 type Summary struct {

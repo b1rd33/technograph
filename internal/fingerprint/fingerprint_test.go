@@ -156,10 +156,33 @@ func TestChannelPatternOrListShape(t *testing.T) {
 	}
 }
 
+func TestTechnologyCategoriesAreNormalizedAndExposed(t *testing.T) {
+	t.Parallel()
+	payload := []byte(`{"schema_version":1,"technologies":{"Example":{"category":"Analytics","categories":["Marketing","Analytics"],"html":"example"}}}`)
+	database, warnings, err := Load(payload, true)
+	if err != nil || len(warnings) != 0 {
+		t.Fatalf("Load: warnings=%v error=%v", warnings, err)
+	}
+	want := "Analytics|Marketing"
+	if got := strings.Join(database.Categories("Example"), "|"); got != want {
+		t.Fatalf("categories = %q, want %q", got, want)
+	}
+	descriptors := database.Descriptors()
+	if len(descriptors) != 1 || strings.Join(descriptors[0].Categories, "|") != want {
+		t.Fatalf("descriptors = %#v", descriptors)
+	}
+	returned := database.Categories("Example")
+	returned[0] = "mutated"
+	if strings.Join(database.Categories("Example"), "|") != want {
+		t.Fatal("Categories returned mutable database state")
+	}
+}
+
 func TestMalformedFingerprintsFailAtLoad(t *testing.T) {
 	t.Parallel()
 	tests := [][]byte{
 		[]byte(`not json`),
+		[]byte(`{"schema_version":1,"technologies":{"Bad":{"categories":[""],"html":"x"}}}`),
 		rawPayload(t, map[string][]rawPattern{"Empty": {}}),
 		rawPayload(t, map[string][]rawPattern{"Bad channel": {{Channel: "unknown", Regex: "x"}}}),
 		rawPayload(t, map[string][]rawPattern{"Bad target": {{Channel: "html", Regex: "x", Target: "other"}}}),

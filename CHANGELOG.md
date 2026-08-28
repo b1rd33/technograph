@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.4.0 — 2026-08-28
+
+- Add deterministic table and spreadsheet-safe CSV scan output while retaining
+  the existing JSON and completion-order JSONL contracts.
+- Add optional technology categories to bundled and external fingerprint
+  definitions, structured results, inventory, human reports, and exports.
+- Add repeatable, local-only custom DNS resolver flags with strict literal-IP
+  and port validation; MCP continues to use system DNS.
+- Preserve the original assignment output and conservative matching rules.
+
 ## v0.3.1 — 2026-08-28
 
 - Explain the CLI's purpose, command choices, and human/JSON/MCP interfaces in

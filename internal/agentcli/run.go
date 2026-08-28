@@ -56,7 +56,7 @@ Usage:
   technograph [legacy flags] domains.txt
 
 Commands:
-  scan          Scan domains and return structured JSON or JSONL
+  scan          Scan domains and return JSON, JSONL, table, or CSV
   explain       Scan domains and print a human-readable evidence report
   validate      Validate and normalize domains without network requests
   fingerprints  List the embedded detection fingerprints
@@ -106,9 +106,18 @@ type scanFlags struct {
 	concurrency     int
 	httpTimeout     time.Duration
 	dnsTimeout      time.Duration
+	dnsServers      stringList
 	evidence        bool
 	verbose         bool
 	allowPrivateNet bool
+}
+
+type stringList []string
+
+func (values *stringList) String() string { return strings.Join(*values, ",") }
+func (values *stringList) Set(value string) error {
+	*values = append(*values, value)
+	return nil
 }
 
 func newScanService(config scanFlags, bundled []byte, stderr io.Writer) (*app.Service, error) {
@@ -124,6 +133,7 @@ func newScanService(config scanFlags, bundled []byte, stderr io.Writer) (*app.Se
 	service, warnings, err := app.New(app.Options{
 		FingerprintData: fingerprintData, StrictFingerprints: strict,
 		Concurrency: config.concurrency, HTTPTimeout: config.httpTimeout, DNSTimeout: config.dnsTimeout,
+		DNSServers:    config.dnsServers,
 		DomainTimeout: max(config.httpTimeout, config.dnsTimeout) + time.Second,
 		SafeNetwork:   !config.allowPrivateNet, Logger: logger,
 	})
@@ -140,7 +150,7 @@ func runScan(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 	flags := flag.NewFlagSet("technograph scan", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	config := scanFlags{}
-	flags.StringVar(&config.format, "format", "json", "output format: json or jsonl")
+	flags.StringVar(&config.format, "format", "json", "output format: json, jsonl, table, or csv")
 	flags.StringVar(&config.input, "input", "", "domain file path, or - for stdin")
 	flags.StringVar(&config.output, "output", "", "output path (default stdout)")
 	flags.StringVar(&config.fingerprints, "fingerprints", "", "external normalized fingerprint JSON")
@@ -148,24 +158,28 @@ func runScan(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 	flags.IntVar(&config.concurrency, "concurrency", 10, "maximum domains scanned concurrently")
 	flags.DurationVar(&config.httpTimeout, "timeout", 8*time.Second, "HTTP timeout per domain")
 	flags.DurationVar(&config.dnsTimeout, "dns-timeout", 3*time.Second, "timeout per DNS record query")
+	flags.Var(&config.dnsServers, "dns-server", "custom DNS resolver IP[:port] (repeatable)")
 	flags.BoolVar(&config.evidence, "evidence", true, "include matching evidence")
 	flags.BoolVar(&config.verbose, "verbose", false, "enable verbose diagnostics on stderr")
 	flags.BoolVar(&config.allowPrivateNet, "allow-private-network", false, "disable autonomous SSRF protection for this local invocation")
 	if wantsHelp(args) {
 		subcommandUsage(stdout, "technograph scan [flags] [domain ...]", flags,
-			`Scans public domains and emits versioned JSON or completion-order JSONL.
+			`Scans public domains and emits versioned JSON, completion-order JSONL, a
+compact human table, or spreadsheet-safe CSV. Table and CSV are ordered by input.
 When no domains are provided, input is read from stdin. Per-domain failures are
 returned as structured results and do not abort the batch.
 
 Examples:
   technograph scan stripe.com shopify.com
   technograph scan --input domains.txt --output results.json
+  technograph scan stripe.com shopify.com --format table
+  technograph scan --input domains.txt --format csv --output results.csv
   printf 'stripe.com\nshopify.com\n' | technograph scan --format jsonl`)
 		return 0
 	}
 	normalized, err := intersperse(args, map[string]bool{
 		"format": true, "input": true, "output": true, "fingerprints": true,
-		"request-id": true, "concurrency": true, "timeout": true, "dns-timeout": true,
+		"request-id": true, "concurrency": true, "timeout": true, "dns-timeout": true, "dns-server": true,
 		"evidence": false, "verbose": false, "allow-private-network": false,
 	})
 	if err != nil || flags.Parse(normalized) != nil {
@@ -174,8 +188,8 @@ Examples:
 		}
 		return 2
 	}
-	if config.format != "json" && config.format != "jsonl" {
-		fmt.Fprintln(stderr, "technograph: format must be json or jsonl")
+	if config.format != "json" && config.format != "jsonl" && config.format != "table" && config.format != "csv" {
+		fmt.Fprintln(stderr, "technograph: format must be json, jsonl, table, or csv")
 		return 2
 	}
 	if config.concurrency < 1 || config.httpTimeout <= 0 || config.dnsTimeout <= 0 {
@@ -204,6 +218,17 @@ Examples:
 	}
 	if !config.evidence {
 		stripEvidence(report.Results)
+	}
+	if config.format == "table" {
+		return writeBytes(renderTable(report), config.output, stdout, stderr)
+	}
+	if config.format == "csv" {
+		data, err := renderCSV(report)
+		if err != nil {
+			fmt.Fprintf(stderr, "technograph: encode CSV: %v\n", err)
+			return 1
+		}
+		return writeBytes(data, config.output, stdout, stderr)
 	}
 	return writeValue(report, config.output, stdout, stderr)
 }

@@ -110,7 +110,7 @@ func TestTopLevelHelpExplainsInterfaces(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Technograph detects technologies", "Commands:",
-		"scan          Scan domains and return structured JSON or JSONL",
+		"scan          Scan domains and return JSON, JSONL, table, or CSV",
 		"explain       Scan domains and print a human-readable evidence report",
 		"Use technograph-mcp", "assignment compatibility",
 	} {
