@@ -2,11 +2,9 @@ package agentcli
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"sort"
 	"time"
 
 	"github.com/b1rd33/technograph/internal/agentapi"
@@ -95,59 +93,22 @@ Examples:
 	// compatibility identity and establish a baseline when callers change it.
 	version := fmt.Sprintf("%s;pages=%d", buildinfo.Identity(), config.pageLimit)
 	digest := service.FingerprintDigest()
-	changes, baselines, err := compareWithHistory(store, report, version, digest)
+	watchReport, err := history.Observe(store, report, version, digest)
 	if err != nil {
-		fmt.Fprintf(stderr, "technograph: compare history: %v\n", err)
+		fmt.Fprintf(stderr, "technograph: watch history: %v\n", err)
 		return 1
-	}
-	stored, err := store.Save(report, version, digest)
-	if err != nil {
-		fmt.Fprintf(stderr, "technograph: save history: %v\n", err)
-		return 1
-	}
-	references := make([]history.StoredRef, 0, len(stored))
-	for _, entry := range stored {
-		references = append(references, history.StoredRef{Domain: entry.Result.Domain, ID: entry.ID, RecordedAt: entry.RecordedAt})
-	}
-	watchReport := history.WatchReport{
-		SchemaVersion: history.SchemaVersion, GeneratedAt: report.GeneratedAt,
-		Scan: report, Changes: changes, Baselines: baselines, Stored: references,
 	}
 	if code := writeValue(watchReport, config.output, stdout, stderr); code != 0 {
 		return code
 	}
-	if *failOnChange && len(changes.Changes) > 0 {
+	if *failOnChange && len(watchReport.Changes.Changes) > 0 {
 		return 3
 	}
 	return 0
 }
 
 func compareWithHistory(store history.Store, report agentapi.Report, version, digest string) (agentapi.DiffReport, []history.Baseline, error) {
-	before := agentapi.Report{SchemaVersion: agentapi.SchemaVersion, Results: []agentapi.DomainResult{}}
-	comparableAfter := agentapi.Report{SchemaVersion: agentapi.SchemaVersion, RequestID: report.RequestID, GeneratedAt: report.GeneratedAt, Results: []agentapi.DomainResult{}}
-	baselines := make([]history.Baseline, 0)
-	for _, result := range report.Results {
-		if result.Domain == "" || result.Status == agentapi.StatusInvalid {
-			continue
-		}
-		previous, err := store.Latest(result.Domain)
-		switch {
-		case errors.Is(err, history.ErrNoHistory):
-			baselines = append(baselines, history.Baseline{Domain: result.Domain, Reason: "first_observation"})
-		case err != nil:
-			return agentapi.DiffReport{}, nil, fmt.Errorf("load %s: %w", result.Domain, err)
-		case previous.FingerprintDigest != digest:
-			baselines = append(baselines, history.Baseline{Domain: result.Domain, Reason: "fingerprint_changed"})
-		case previous.ScannerVersion != version:
-			baselines = append(baselines, history.Baseline{Domain: result.Domain, Reason: "scanner_changed"})
-		default:
-			before.Results = append(before.Results, previous.Result)
-			comparableAfter.Results = append(comparableAfter.Results, result)
-		}
-	}
-	changes := agentapi.Diff(before, comparableAfter, report.GeneratedAt)
-	sort.Slice(baselines, func(i, j int) bool { return baselines[i].Domain < baselines[j].Domain })
-	return changes, baselines, nil
+	return history.Compare(store, report, version, digest)
 }
 
 func runHistory(args []string, stdout, stderr io.Writer) int {

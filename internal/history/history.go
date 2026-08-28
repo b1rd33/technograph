@@ -67,6 +67,58 @@ type Store struct {
 	Now  func() time.Time
 }
 
+// Compare returns only changes from observations made with the same scanner
+// and fingerprint identities. Incompatible or first observations establish a
+// baseline instead of manufacturing technology changes.
+func Compare(store Store, report agentapi.Report, scannerVersion, fingerprintDigest string) (agentapi.DiffReport, []Baseline, error) {
+	before := agentapi.Report{SchemaVersion: agentapi.SchemaVersion, Results: []agentapi.DomainResult{}}
+	comparableAfter := agentapi.Report{SchemaVersion: agentapi.SchemaVersion, RequestID: report.RequestID, GeneratedAt: report.GeneratedAt, Results: []agentapi.DomainResult{}}
+	baselines := make([]Baseline, 0)
+	for _, result := range report.Results {
+		if result.Domain == "" || result.Status == agentapi.StatusInvalid {
+			continue
+		}
+		previous, err := store.Latest(result.Domain)
+		switch {
+		case errors.Is(err, ErrNoHistory):
+			baselines = append(baselines, Baseline{Domain: result.Domain, Reason: "first_observation"})
+		case err != nil:
+			return agentapi.DiffReport{}, nil, fmt.Errorf("load %s: %w", result.Domain, err)
+		case previous.FingerprintDigest != fingerprintDigest:
+			baselines = append(baselines, Baseline{Domain: result.Domain, Reason: "fingerprint_changed"})
+		case previous.ScannerVersion != scannerVersion:
+			baselines = append(baselines, Baseline{Domain: result.Domain, Reason: "scanner_changed"})
+		default:
+			before.Results = append(before.Results, previous.Result)
+			comparableAfter.Results = append(comparableAfter.Results, result)
+		}
+	}
+	changes := agentapi.Diff(before, comparableAfter, report.GeneratedAt)
+	sort.Slice(baselines, func(i, j int) bool { return baselines[i].Domain < baselines[j].Domain })
+	return changes, baselines, nil
+}
+
+// Observe compares a completed scan to compatible history, then stores it as
+// an immutable observation. Comparison completes before any write occurs.
+func Observe(store Store, report agentapi.Report, scannerVersion, fingerprintDigest string) (WatchReport, error) {
+	changes, baselines, err := Compare(store, report, scannerVersion, fingerprintDigest)
+	if err != nil {
+		return WatchReport{}, err
+	}
+	stored, err := store.Save(report, scannerVersion, fingerprintDigest)
+	if err != nil {
+		return WatchReport{}, err
+	}
+	references := make([]StoredRef, 0, len(stored))
+	for _, entry := range stored {
+		references = append(references, StoredRef{Domain: entry.Result.Domain, ID: entry.ID, RecordedAt: entry.RecordedAt})
+	}
+	return WatchReport{
+		SchemaVersion: SchemaVersion, GeneratedAt: report.GeneratedAt,
+		Scan: report, Changes: changes, Baselines: baselines, Stored: references,
+	}, nil
+}
+
 func (store Store) Save(report agentapi.Report, scannerVersion, fingerprintDigest string) ([]Entry, error) {
 	if report.RequestID == "" || strings.TrimSpace(scannerVersion) == "" || !validDigest(fingerprintDigest) {
 		return nil, errors.New("history metadata is incomplete")

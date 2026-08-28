@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/b1rd33/technograph/schemas/grounded-explanation.schema.json",
+  "title": "Technograph evidence-grounded domain explanation",
+  "type": "object",
+  "required": ["schema_version", "domain", "status", "overview", "technologies", "warnings", "errors"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "domain": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["ok", "partial", "blocked", "failed", "invalid"] },
+    "overview": { "type": "string", "minLength": 1 },
+    "technologies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["technology", "categories", "evidence"],
+        "properties": {
+          "technology": { "type": "string", "minLength": 1 },
+          "categories": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+          "evidence": { "type": "array", "items": { "type": "object" }, "minItems": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "warnings": { "type": "array", "items": { "type": "object" } },
+    "errors": { "type": "array", "items": { "type": "object" } }
+  },
+  "additionalProperties": false
+}

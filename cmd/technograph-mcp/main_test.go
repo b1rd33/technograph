@@ -17,7 +17,7 @@ func TestHandleMetaCommandHelp(t *testing.T) {
 			if !strings.Contains(stdout.String(), "Usage: technograph-mcp") {
 				t.Fatalf("stdout = %q", stdout.String())
 			}
-			for _, want := range []string{"scan_domain", "scan_domains", "validate_domain", "list_fingerprints", "mcpServers"} {
+			for _, want := range []string{"scan_domain", "scan_domains", "explain_domain", "validate_domain", "list_fingerprints", "watch_domain", "domain_history", "mcpServers"} {
 				if !strings.Contains(stdout.String(), want) {
 					t.Fatalf("stdout missing %q: %q", want, stdout.String())
 				}
@@ -26,6 +26,14 @@ func TestHandleMetaCommandHelp(t *testing.T) {
 				t.Fatalf("stderr = %q", stderr.String())
 			}
 		})
+	}
+}
+
+func TestParseServerArgsAcceptsFixedHistoryRoot(t *testing.T) {
+	var stderr bytes.Buffer
+	root, err := parseServerArgs([]string{"--history", "/tmp/technograph-history"}, &stderr)
+	if err != nil || root != "/tmp/technograph-history" || stderr.Len() != 0 {
+		t.Fatalf("root=%q error=%v stderr=%q", root, err, stderr.String())
 	}
 }
 

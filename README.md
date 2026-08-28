@@ -141,8 +141,10 @@ per-domain HTTP deadline, and never execute JavaScript. Evidence from an
 opt-in scan includes the page URL. A secondary failure makes the structured
 result partial but preserves valid homepage and DNS observations.
 
-The separate `technograph-mcp` binary serves four local stdio tools:
-`scan_domain`, `scan_domains`, `validate_domain`, and `list_fingerprints`.
+The separate `technograph-mcp` binary always serves five local stdio tools:
+`scan_domain`, `scan_domains`, `explain_domain`, `validate_domain`, and
+`list_fingerprints`. `explain_domain` groups every technology only with its
+actual matching evidence; it never asks a language model to invent confidence.
 
 ```json
 {
@@ -151,6 +153,24 @@ The separate `technograph-mcp` binary serves four local stdio tools:
   }
 }
 ```
+
+Starting the server with a human-chosen fixed history directory adds
+`watch_domain` and `domain_history`:
+
+```json
+{
+  "mcpServers": {
+    "technograph": {
+      "command": "technograph-mcp",
+      "args": ["--history", "/absolute/path/to/history"]
+    }
+  }
+}
+```
+
+The agent cannot provide or change that filesystem path. `watch_domain` is the
+only state-changing MCP tool and stores the same private immutable observation
+used by the CLI; all other tools are read-only.
 
 See [docs/agent-interface.md](docs/agent-interface.md) for the complete contract,
 [docs/fingerprint-import.md](docs/fingerprint-import.md) for the native
@@ -210,9 +230,10 @@ The implementation is divided into small packages:
 - `internal/policy` resolves and pins public addresses for autonomous HTTP
   requests while rejecting private, loopback, link-local, metadata, multicast,
   documentation, and other special-use networks.
-- `internal/mcpserver` exposes a small read-only tool surface using the official
-  Go MCP SDK. MCP dependencies and protocol output are isolated in the separate
-  `technograph-mcp` executable.
+- `internal/mcpserver` exposes a small explicitly scoped tool surface using the
+  official Go MCP SDK. MCP dependencies and protocol output are isolated in the
+  separate `technograph-mcp` executable. Optional history is fixed at process
+  startup and cannot be redirected by a tool call.
 
 The supplied fingerprint file uses a normalized representation because the
 assignment's header and cookie expressions match names, while native

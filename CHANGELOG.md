@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.9.0 — 2026-08-28
+
+- Add the always-available MCP `explain_domain` tool, grouping each technology
+  only with its exact matching evidence and carrying partial-scan issues.
+- Add opt-in MCP `watch_domain` and `domain_history` tools when a human starts
+  the server with a fixed `--history PATH`; agents cannot select storage paths.
+- Share conservative baseline comparison and immutable observation logic
+  between CLI and MCP, with serialized MCP history writes.
+- Add an evidence-explanation schema and in-memory MCP round-trip tests for all
+  default and history-enabled tool surfaces.
+
 ## v0.8.0 — 2026-08-28
 
 - Add `technograph explore`, a dependency-free interactive terminal evidence

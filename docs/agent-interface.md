@@ -130,10 +130,11 @@ Uncertain removals remain data, not a notification exit. The schemas are
 ## Local MCP server
 
 `technograph-mcp` is a separate stdio binary so MCP protocol JSON can never be
-mixed with normal CLI output. It exposes four read-only tools:
+mixed with normal CLI output. It always exposes five tools:
 
 - `scan_domain`
 - `scan_domains` (maximum 20 domains)
+- `explain_domain` (deterministic evidence-grouped claims)
 - `validate_domain`
 - `list_fingerprints`
 
@@ -148,6 +149,25 @@ Example client configuration:
   }
 }
 ```
+
+History is explicitly opt-in at process startup:
+
+```json
+{
+  "mcpServers": {
+    "technograph": {
+      "command": "technograph-mcp",
+      "args": ["--history", "/absolute/path/to/history"]
+    }
+  }
+}
+```
+
+This adds `watch_domain` and `domain_history`. The former performs a fresh scan,
+conservative comparison, and immutable save; the latter is offline and
+read-only. Tool inputs never contain a path, so an agent cannot redirect the
+store. MCP history operations use homepage-only coverage and the same
+scanner/fingerprint compatibility baselines as CLI `watch`.
 
 The server uses only embedded fingerprints, enforces a global 20-domain work
 limit, and always enables its autonomous network policy. It accepts bare public

@@ -60,6 +60,10 @@ summarize only confirmed additions/removals plus `uncertain` observations. No
 Technograph-specific skill is required: the CLI JSON contract and the local MCP
 tools are sufficient. Keep notification credentials outside Technograph.
 
+An MCP client may instead start `technograph-mcp --history /absolute/history`
+and use `watch_domain` plus `domain_history`. The history directory is fixed by
+the human-owned client configuration and cannot be changed by a tool call.
+
 ## Caching
 
 Scanning remains fresh by default. History is not a result cache and never
