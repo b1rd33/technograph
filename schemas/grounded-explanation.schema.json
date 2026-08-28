@@ -17,13 +17,13 @@
         "properties": {
           "technology": { "type": "string", "minLength": 1 },
           "categories": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
-          "evidence": { "type": "array", "items": { "type": "object" }, "minItems": 1 }
+          "evidence": { "type": "array", "items": { "$ref": "scan-report.schema.json#/$defs/evidence" }, "minItems": 1 }
         },
         "additionalProperties": false
       }
     },
-    "warnings": { "type": "array", "items": { "type": "object" } },
-    "errors": { "type": "array", "items": { "type": "object" } }
+    "warnings": { "type": "array", "items": { "$ref": "scan-report.schema.json#/$defs/issue" } },
+    "errors": { "type": "array", "items": { "$ref": "scan-report.schema.json#/$defs/issue" } }
   },
   "additionalProperties": false
 }

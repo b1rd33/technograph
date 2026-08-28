@@ -1,7 +1,7 @@
 # Release process
 
 1. Confirm `main` is clean and CI is green.
-2. Run `make release-check`, `make test`, and `make race`.
+2. Run `make release-check`, `make test`, `make race`, and `make benchmark`.
 3. Tag the release with `git tag -a vX.Y.Z -m "technograph vX.Y.Z"` and push the tag.
 4. Wait for the Release workflow to publish all four platform archives and
    `checksums.txt`. Each archive must contain `technograph`,

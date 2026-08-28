@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.x"
+          go-version: "1.25.7"
           cache: true
       - name: Check formatting
         run: test -z "$(gofmt -l .)"
@@ -23,6 +23,8 @@ jobs:
         run: go vet ./...
       - name: Test
         run: go test ./...
+      - name: Offline benchmarks
+        run: go test -run '^$' -bench . -benchtime=100x ./internal/fingerprint ./internal/extract
       - name: Race detector
         run: go test -race ./...
       - name: Build

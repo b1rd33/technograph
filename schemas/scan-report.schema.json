@@ -40,12 +40,78 @@
           "type": "object",
           "additionalProperties": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
         },
-        "evidence": { "type": "array", "items": { "type": "object" } },
-        "http": { "type": "object" },
-        "dns": { "type": "object" },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+        "http": { "$ref": "#/$defs/http" },
+        "dns": { "$ref": "#/$defs/dns" },
         "warnings": { "type": "array", "items": { "$ref": "#/$defs/issue" } },
         "errors": { "type": "array", "items": { "$ref": "#/$defs/issue" } },
         "elapsed_ms": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["technology", "channel", "pattern", "matched", "origin", "confidence"],
+      "properties": {
+        "technology": { "type": "string", "minLength": 1 },
+        "channel": { "enum": ["header", "script", "cookie", "html", "meta", "js", "dns_txt", "dns_cname", "dns_mx"] },
+        "selector": { "type": "string" },
+        "pattern": { "type": "string" },
+        "matched": { "type": "string" },
+        "origin": { "type": "string", "minLength": 1 },
+        "page_url": { "type": "string", "format": "uri" },
+        "confidence": { "type": "integer", "minimum": 0, "maximum": 100 }
+      },
+      "additionalProperties": false
+    },
+    "httpPage": {
+      "type": "object",
+      "required": ["requested_url", "redirects", "body_bytes", "body_truncated", "blocked", "challenge"],
+      "properties": {
+        "requested_url": { "type": "string", "format": "uri" },
+        "final_url": { "type": "string", "format": "uri" },
+        "status_code": { "type": "integer", "minimum": 100, "maximum": 599 },
+        "redirects": { "type": "integer", "minimum": 0 },
+        "content_type": { "type": "string" },
+        "body_bytes": { "type": "integer", "minimum": 0 },
+        "body_truncated": { "type": "boolean" },
+        "blocked": { "type": "boolean" },
+        "challenge": { "type": "boolean" },
+        "block_reason": { "type": "string" },
+        "error": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "http": {
+      "type": "object",
+      "required": ["redirects", "body_bytes", "body_truncated", "blocked", "challenge"],
+      "properties": {
+        "requested_url": { "type": "string", "format": "uri" },
+        "final_url": { "type": "string", "format": "uri" },
+        "status_code": { "type": "integer", "minimum": 100, "maximum": 599 },
+        "redirects": { "type": "integer", "minimum": 0 },
+        "content_type": { "type": "string" },
+        "body_bytes": { "type": "integer", "minimum": 0 },
+        "body_truncated": { "type": "boolean" },
+        "blocked": { "type": "boolean" },
+        "challenge": { "type": "boolean" },
+        "block_reason": { "type": "string" },
+        "error": { "type": "string" },
+        "page_count": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "pages": { "type": "array", "items": { "$ref": "#/$defs/httpPage" }, "maxItems": 4 }
+      },
+      "additionalProperties": false
+    },
+    "dns": {
+      "type": "object",
+      "required": ["apex", "mx", "txt", "cname"],
+      "properties": {
+        "apex": { "type": "string" },
+        "mx": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "txt": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "cname": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "status": { "type": "object", "additionalProperties": { "enum": ["ok", "nodata", "nxdomain", "error", "cancelled"] } },
+        "errors": { "type": "object", "additionalProperties": { "type": "string" } }
       },
       "additionalProperties": false
     },

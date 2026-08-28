@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.0.0 — 2026-08-28
+
+- Declare stable 1.x CLI, JSON/JSONL, schema, normalized-fingerprint, history,
+  and MCP compatibility guarantees with documented exit statuses.
+- Add golden structured-report and assignment-artifact contract tests plus JSON
+  validation for every published schema.
+- Add reproducible offline matcher/extractor benchmarks and fixed-iteration CI
+  smoke benchmarks; pin canonical formatting to Go 1.25.7 across environments.
+- Remove the completed internal implementation plan from the public deliverable
+  and add concise contribution and release-quality documentation.
+- Complete a clean Go 1.25/Go 1.27 test, race, vet, build, live assignment, MCP,
+  release-archive, checksum, and Homebrew verification pass.
+
 ## v0.9.0 — 2026-08-28
 
 - Add the always-available MCP `explain_domain` tool, grouping each technology

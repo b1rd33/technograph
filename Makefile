@@ -1,7 +1,9 @@
-.PHONY: fmt vet test race build scan release-check snapshot clean
+.PHONY: fmt vet test race benchmark build scan release-check snapshot clean
+
+GO_FORMAT_TOOLCHAIN ?= go1.25.7
 
 fmt:
-	go fmt ./...
+	GOTOOLCHAIN=$(GO_FORMAT_TOOLCHAIN) go fmt ./...
 
 vet:
 	go vet ./...
@@ -11,6 +13,9 @@ test:
 
 race:
 	go test -race ./...
+
+benchmark:
+	go test -run '^$$' -bench . -benchmem ./internal/fingerprint ./internal/extract
 
 build:
 	mkdir -p bin

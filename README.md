@@ -173,9 +173,11 @@ only state-changing MCP tool and stores the same private immutable observation
 used by the CLI; all other tools are read-only.
 
 See [docs/agent-interface.md](docs/agent-interface.md) for the complete contract,
+[docs/stability.md](docs/stability.md) for the 1.x compatibility policy,
 [docs/fingerprint-import.md](docs/fingerprint-import.md) for the native
 Wappalyzer adapter and compatibility reports,
-[docs/automation.md](docs/automation.md) for scheduling patterns, and
+[docs/automation.md](docs/automation.md) for scheduling patterns,
+[docs/benchmarks.md](docs/benchmarks.md) for reproducible performance checks, and
 [schemas/scan-report.schema.json](schemas/scan-report.schema.json) for the
 machine-readable schema. No Codex/ChatGPT skill is created or required.
 
@@ -308,6 +310,7 @@ make fmt
 make vet
 make test
 make race
+make benchmark
 make build
 ```
 
