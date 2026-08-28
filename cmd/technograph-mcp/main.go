@@ -50,8 +50,26 @@ func handleMetaCommand(args []string, stdout, stderr io.Writer) (bool, int) {
 			fmt.Fprintln(stdout, buildinfo.String())
 			return true, 0
 		case "--help", "-h":
-			fmt.Fprintln(stdout, "Usage: technograph-mcp [--version]")
-			fmt.Fprintln(stdout, "\nRuns the read-only Technograph MCP server over stdin/stdout.")
+			fmt.Fprintln(stdout, `Technograph MCP exposes the evidence-based scanner to MCP-compatible AI
+clients as a local, read-only stdio server.
+
+Usage: technograph-mcp [--version]
+
+Tools:
+  scan_domain       Scan one public domain with evidence and diagnostics
+  scan_domains      Scan up to 20 public domains concurrently
+  validate_domain   Validate one domain without network access
+  list_fingerprints List the embedded detection rules
+
+Example client configuration:
+  {
+    "mcpServers": {
+      "technograph": { "command": "technograph-mcp" }
+    }
+  }
+
+The server rejects private and reserved network targets, uses embedded
+fingerprints only, and writes MCP protocol messages to stdout.`)
 			return true, 0
 		}
 	}

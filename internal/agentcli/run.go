@@ -48,16 +48,32 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 }
 
 func usage(writer io.Writer) {
-	fmt.Fprintln(writer, `Usage:
-  technograph [legacy flags] domains.txt
-  technograph scan [flags] [domain ...]
-  technograph explain [flags] [domain ...]
-  technograph validate [flags] [domain ...]
-  technograph fingerprints [flags]
-  technograph compare [flags] before.json after.json
+	fmt.Fprintln(writer, `Technograph detects technologies used by public websites from HTTP, HTML,
+cookies, scripts, and DNS evidence.
 
-Structured commands accept flags before or after domain arguments. When no
-domains are provided, scan, explain, and validate read one domain per line from stdin.`)
+Usage:
+  technograph <command> [options]
+  technograph [legacy flags] domains.txt
+
+Commands:
+  scan          Scan domains and return structured JSON or JSONL
+  explain       Scan domains and print a human-readable evidence report
+  validate      Validate and normalize domains without network requests
+  fingerprints  List the embedded detection fingerprints
+  compare       Compare two structured scan snapshots conservatively
+  help          Show this help
+
+Examples:
+  technograph explain stripe.com
+  technograph scan stripe.com shopify.com
+  technograph scan --input domains.txt --output results.json
+  technograph validate stripe.com https://invalid.example
+  technograph compare before.json after.json
+
+Use "technograph <command> --help" for command-specific options and examples.
+Use technograph-mcp to expose the same scanner to MCP-compatible AI clients.
+
+The legacy file-based command remains available for assignment compatibility.`)
 }
 
 func wantsHelp(args []string) bool {
@@ -137,7 +153,14 @@ func runScan(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 	flags.BoolVar(&config.allowPrivateNet, "allow-private-network", false, "disable autonomous SSRF protection for this local invocation")
 	if wantsHelp(args) {
 		subcommandUsage(stdout, "technograph scan [flags] [domain ...]", flags,
-			"When no domains are provided, input is read from stdin. Per-domain failures are returned as structured results.")
+			`Scans public domains and emits versioned JSON or completion-order JSONL.
+When no domains are provided, input is read from stdin. Per-domain failures are
+returned as structured results and do not abort the batch.
+
+Examples:
+  technograph scan stripe.com shopify.com
+  technograph scan --input domains.txt --output results.json
+  printf 'stripe.com\nshopify.com\n' | technograph scan --format jsonl`)
 		return 0
 	}
 	normalized, err := intersperse(args, map[string]bool{
@@ -235,7 +258,13 @@ func runValidate(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	outputPath := flags.String("output", "", "output path (default stdout)")
 	if wantsHelp(args) {
 		subcommandUsage(stdout, "technograph validate [flags] [domain ...]", flags,
-			"Validation performs no network access. When no domains are provided, input is read from stdin.")
+			`Validates and normalizes inputs without making network requests. When no
+domains are provided, input is read from stdin.
+
+Examples:
+  technograph validate stripe.com https://invalid.example
+  technograph validate --input domains.txt
+  printf 'stripe.com\n' | technograph validate`)
 		return 0
 	}
 	normalized, err := intersperse(args, map[string]bool{"input": true, "output": true})
@@ -269,7 +298,13 @@ func runFingerprints(args []string, stdout, stderr io.Writer, bundled []byte) in
 	outputPath := flags.String("output", "", "output path (default stdout)")
 	if wantsHelp(args) {
 		subcommandUsage(stdout, "technograph fingerprints [flags]", flags,
-			"Lists the exact fingerprint rules used by the scanner without making network requests.")
+			`Lists the exact fingerprint rules used by the scanner without making network
+requests. External normalized databases can be inspected with --fingerprints.
+
+Examples:
+  technograph fingerprints
+  technograph fingerprints --output fingerprints-report.json
+  technograph fingerprints --fingerprints custom-fingerprints.json`)
 		return 0
 	}
 	if flags.Parse(args) != nil || flags.NArg() != 0 {
@@ -300,7 +335,12 @@ func runCompare(args []string, stdout, stderr io.Writer) int {
 	outputPath := flags.String("output", "", "output path (default stdout)")
 	if wantsHelp(args) {
 		subcommandUsage(stdout, "technograph compare [flags] before.json after.json", flags,
-			"Removals are suppressed as uncertain unless the current domain status is ok.")
+			`Compares two structured scan snapshots. Additions are always reported;
+removals are marked uncertain unless the current domain status is ok.
+
+Examples:
+  technograph compare before.json after.json
+  technograph compare before.json after.json --output changes.json`)
 		return 0
 	}
 	normalized, err := intersperse(args, map[string]bool{"output": true})

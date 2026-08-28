@@ -101,3 +101,36 @@ func TestHelpAfterDoubleDashIsTreatedAsInput(t *testing.T) {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
 }
+
+func TestTopLevelHelpExplainsInterfaces(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"--help"}, strings.NewReader(""), &stdout, &stderr, nil)
+	if code != 0 || stderr.Len() != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
+	}
+	for _, want := range []string{
+		"Technograph detects technologies", "Commands:",
+		"scan          Scan domains and return structured JSON or JSONL",
+		"explain       Scan domains and print a human-readable evidence report",
+		"Use technograph-mcp", "assignment compatibility",
+	} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("stdout missing %q:\n%s", want, stdout.String())
+		}
+	}
+}
+
+func TestSubcommandHelpIncludesExamples(t *testing.T) {
+	for _, command := range []string{"scan", "explain", "validate", "fingerprints", "compare"} {
+		t.Run(command, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := Run(context.Background(), []string{command, "--help"}, strings.NewReader(""), &stdout, &stderr, nil)
+			if code != 0 || stderr.Len() != 0 {
+				t.Fatalf("code = %d, stderr = %q", code, stderr.String())
+			}
+			if !strings.Contains(stdout.String(), "Examples:") || !strings.Contains(stdout.String(), "technograph "+command) {
+				t.Fatalf("stdout = %q", stdout.String())
+			}
+		})
+	}
+}

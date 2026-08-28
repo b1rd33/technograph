@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.3.1 — 2026-08-28
+
+- Explain the CLI's purpose, command choices, and human/JSON/MCP interfaces in
+  top-level help.
+- Add practical examples and behavior notes to every subcommand's help.
+- Document all four MCP tools, local client configuration, and safety defaults
+  in `technograph-mcp --help`.
+
 ## v0.3.0 — 2026-08-28
 
 - Add `technograph explain` for deterministic human-readable technology

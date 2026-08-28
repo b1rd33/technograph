@@ -30,7 +30,16 @@ func runExplain(ctx context.Context, args []string, stdin io.Reader, stdout, std
 	flags.BoolVar(&config.allowPrivateNet, "allow-private-network", false, "disable autonomous SSRF protection for this local invocation")
 	if wantsHelp(args) {
 		subcommandUsage(stdout, "technograph explain [flags] [domain ...]", flags,
-			"Produces a human-readable evidence report. When no domains are provided, input is read from stdin.")
+			`Runs the same deterministic scanner as "scan" and formats its evidence for
+people. The report includes technology matches, HTTP/DNS coverage, timing, and
+partial, blocked, failed, or invalid conditions. When no domains are provided,
+input is read from stdin.
+
+Examples:
+  technograph explain stripe.com
+  technograph explain stripe.com shopify.com
+  technograph explain --input domains.txt
+  technograph explain --input domains.txt --output evidence-report.txt`)
 		return 0
 	}
 	normalized, err := intersperse(args, map[string]bool{

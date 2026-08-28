@@ -17,6 +17,11 @@ func TestHandleMetaCommandHelp(t *testing.T) {
 			if !strings.Contains(stdout.String(), "Usage: technograph-mcp") {
 				t.Fatalf("stdout = %q", stdout.String())
 			}
+			for _, want := range []string{"scan_domain", "scan_domains", "validate_domain", "list_fingerprints", "mcpServers"} {
+				if !strings.Contains(stdout.String(), want) {
+					t.Fatalf("stdout missing %q: %q", want, stdout.String())
+				}
+			}
 			if stderr.Len() != 0 {
 				t.Fatalf("stderr = %q", stderr.String())
 			}
