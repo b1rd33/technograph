@@ -99,6 +99,8 @@ technograph validate example.com https://invalid.example
 technograph fingerprints
 technograph fingerprints import --input webappanalyzer/src/technologies --output generated.json --report compatibility.json
 technograph compare before.json after.json --output diff.json
+technograph watch stripe.com --store .technograph-history
+technograph history stripe.com --store .technograph-history
 ```
 
 JSON output uses schema version `1.0` and gives every input an `ok`, `partial`,
@@ -115,6 +117,13 @@ a detection and therefore do not change the conservative matching behavior.
 for people: detections are grouped with their matching channel and source,
 followed by HTTP/DNS coverage and any partial or blocked conditions. It does
 not introduce a second detection path or an AI-generated confidence score.
+
+`technograph watch` is also one-shot: it compares a fresh scan with compatible
+immutable local history, stores the observation, and exits. Confirmed changes
+are structured separately from uncertain removals. `--fail-on-change` returns
+status 3 after writing the report, which lets an external scheduler send a
+notification without giving Technograph notification credentials. `history`
+reads those private local entries without network access.
 
 The separate `technograph-mcp` binary serves four local stdio tools:
 `scan_domain`, `scan_domains`, `validate_domain`, and `list_fingerprints`.
@@ -179,6 +188,8 @@ The implementation is divided into small packages:
   parallel inside each domain job, each with a hard parent deadline. Results
   retain input order and partial successes.
 - `internal/output` creates deterministic required JSON and detailed reports.
+- `internal/history` stores private immutable per-domain observations and
+  rejects corrupt, oversized, or incompatible history rather than guessing.
 - `internal/policy` resolves and pins public addresses for autonomous HTTP
   requests while rejecting private, loopback, link-local, metadata, multicast,
   documentation, and other special-use networks.

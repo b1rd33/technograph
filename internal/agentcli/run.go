@@ -38,6 +38,10 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return runFingerprints(args[1:], stdout, stderr, bundledFingerprints)
 	case "compare":
 		return runCompare(args[1:], stdout, stderr)
+	case "watch":
+		return runWatch(ctx, args[1:], stdin, stdout, stderr, bundledFingerprints)
+	case "history":
+		return runHistory(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		usage(stdout)
 		return 0
@@ -62,6 +66,8 @@ Commands:
   validate      Validate and normalize domains without network requests
   fingerprints  List or import detection fingerprints
   compare       Compare two structured scan snapshots conservatively
+  watch         Scan, compare with local history, and store the observation
+  history       Read immutable local observations for one domain
   help          Show this help
 
 Examples:
@@ -70,6 +76,8 @@ Examples:
   technograph scan --input domains.txt --output results.json
   technograph validate stripe.com https://invalid.example
   technograph compare before.json after.json
+  technograph watch stripe.com --store .technograph-history
+  technograph history stripe.com --store .technograph-history
 
 Use "technograph <command> --help" for command-specific options and examples.
 Use technograph-mcp to expose the same scanner to MCP-compatible AI clients.

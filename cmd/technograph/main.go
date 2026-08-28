@@ -24,7 +24,7 @@ func main() {
 
 func isStructuredCommand(argument string) bool {
 	switch argument {
-	case "scan", "explain", "validate", "fingerprints", "compare", "help", "-h", "--help":
+	case "scan", "explain", "validate", "fingerprints", "compare", "watch", "history", "help", "-h", "--help":
 		return true
 	default:
 		return false

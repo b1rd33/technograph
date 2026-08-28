@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"log/slog"
 	"time"
@@ -39,9 +40,10 @@ type Options struct {
 
 // Service owns the reusable resources needed to execute scans.
 type Service struct {
-	scanner  scanner.Scanner
-	database *fingerprint.Database
-	close    func()
+	scanner           scanner.Scanner
+	database          *fingerprint.Database
+	fingerprintDigest string
+	close             func()
 }
 
 // New validates configuration, compiles fingerprints, and constructs a
@@ -100,10 +102,14 @@ func New(options Options) (*Service, []fingerprint.Warning, error) {
 			HTTP: httpProber, DNS: dnsProber, Engine: fingerprint.NewEngine(database),
 			Concurrency: concurrency, Timeout: domainTimeout,
 		},
-		database: database,
-		close:    closeHTTP,
+		database:          database,
+		fingerprintDigest: fmt.Sprintf("sha256:%x", sha256.Sum256(options.FingerprintData)),
+		close:             closeHTTP,
 	}, warnings, nil
 }
+
+// FingerprintDigest identifies the exact source database used by this service.
+func (service *Service) FingerprintDigest() string { return service.fingerprintDigest }
 
 // Fingerprints returns the compiled fingerprint inventory.
 func (service *Service) Fingerprints() []fingerprint.Descriptor {

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/b1rd33/technograph/schemas/watch-report.schema.json",
+  "title": "Technograph watch result",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "scan", "changes", "baselines", "stored"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "scan": { "$ref": "scan-report.schema.json" },
+    "changes": { "$ref": "diff-report.schema.json" },
+    "baselines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["domain", "reason"],
+        "properties": {
+          "domain": { "type": "string" },
+          "reason": { "enum": ["first_observation", "fingerprint_changed", "scanner_changed"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "stored": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["domain", "id", "recorded_at"],
+        "properties": {
+          "domain": { "type": "string" },
+          "id": { "type": "string" },
+          "recorded_at": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

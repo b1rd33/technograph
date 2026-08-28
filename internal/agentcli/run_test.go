@@ -76,6 +76,8 @@ func TestHelpUsesStdoutAndSucceeds(t *testing.T) {
 		{"fingerprints", []string{"fingerprints", "--help"}, "Usage: technograph fingerprints"},
 		{"fingerprint import", []string{"fingerprints", "import", "--help"}, "Usage: technograph fingerprints import"},
 		{"compare", []string{"compare", "-h"}, "Usage: technograph compare"},
+		{"watch", []string{"watch", "--help"}, "Usage: technograph watch"},
+		{"history", []string{"history", "--help"}, "Usage: technograph history"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -159,7 +161,7 @@ func TestTopLevelHelpExplainsInterfaces(t *testing.T) {
 }
 
 func TestSubcommandHelpIncludesExamples(t *testing.T) {
-	for _, command := range []string{"scan", "explain", "validate", "fingerprints", "compare"} {
+	for _, command := range []string{"scan", "explain", "validate", "fingerprints", "compare", "watch", "history"} {
 		t.Run(command, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			code := Run(context.Background(), []string{command, "--help"}, strings.NewReader(""), &stdout, &stderr, nil)

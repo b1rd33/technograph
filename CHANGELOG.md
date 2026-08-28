@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.6.0 — 2026-08-28
+
+- Add one-shot `watch` scans backed by immutable private local observations and
+  newest-first offline `history` queries.
+- Reset comparison baselines when scanner or fingerprint identities change,
+  preventing upgrades from appearing as website technology changes.
+- Preserve conservative removal suppression for blocked/partial scans and add
+  optional exit status 3 for scheduler-owned change notifications.
+- Add bounded/corruption-aware storage, history/watch schemas, live two-cycle
+  verification, and automation documentation.
+
 ## v0.5.0 — 2026-08-28
 
 - Add an offline native Wappalyzer importer for files or complete technology

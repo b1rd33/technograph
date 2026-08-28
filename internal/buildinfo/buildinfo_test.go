@@ -9,4 +9,7 @@ func TestString(t *testing.T) {
 	if got, want := String(), "technograph 1.2.3 (commit abc123, built 2026-08-27)"; got != want {
 		t.Fatalf("String() = %q, want %q", got, want)
 	}
+	if got, want := Identity(), "1.2.3@abc123"; got != want {
+		t.Fatalf("Identity() = %q, want %q", got, want)
+	}
 }

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/b1rd33/technograph/schemas/history-report.schema.json",
+  "title": "Technograph local domain history",
+  "type": "object",
+  "required": ["schema_version", "domain", "entries"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "domain": { "type": "string", "minLength": 1 },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["schema_version", "id", "recorded_at", "request_id", "scanner_version", "fingerprint_digest", "result"],
+        "properties": {
+          "schema_version": { "const": "1.0" },
+          "id": { "type": "string", "minLength": 1 },
+          "recorded_at": { "type": "string", "format": "date-time" },
+          "request_id": { "type": "string", "minLength": 1 },
+          "scanner_version": { "type": "string", "minLength": 1 },
+          "fingerprint_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "result": { "type": "object" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

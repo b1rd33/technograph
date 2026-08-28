@@ -87,6 +87,22 @@ failed, or missing, possible removals go into `uncertain` instead. This prevents
 a temporary outage or bot challenge from becoming a false "technology
 removed" alert. The diff schema is in `schemas/diff-report.schema.json`.
 
+## One-shot local watch history
+
+For local scheduler workflows, `watch` performs the scan, comparison, and
+immutable save in one bounded invocation:
+
+```console
+technograph watch --input domains.txt --store /absolute/history --output watch.json
+technograph history stripe.com --store /absolute/history --limit 10
+```
+
+First observations and scanner/fingerprint identity changes are returned as
+baselines, not additions/removals. `--fail-on-change` returns status 3 only for
+confirmed changes and only after the JSON report and history are written.
+Uncertain removals remain data, not a notification exit. The schemas are
+`schemas/watch-report.schema.json` and `schemas/history-report.schema.json`.
+
 ## Local MCP server
 
 `technograph-mcp` is a separate stdio binary so MCP protocol JSON can never be

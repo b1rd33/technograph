@@ -4,15 +4,28 @@ Technograph stays a one-shot scanner. Scheduling, retention, and notifications
 belong to the environment that already owns those responsibilities rather than
 an embedded daemon holding credentials.
 
-## Cron
+v0.6 adds local immutable history to simplify that one-shot workflow:
 
-Create a timestamped snapshot every day:
-
-```cron
-15 7 * * * /opt/homebrew/bin/technograph scan --input /absolute/path/domains.txt --output /absolute/path/snapshots/current.json
+```console
+technograph watch --input domains.txt --store /absolute/path/history --output watch.json
+technograph history stripe.com --store /absolute/path/history --limit 10
 ```
 
-Keep a previous snapshot before replacing it, then compare the two:
+The first observation establishes a baseline. A changed scanner version or
+fingerprint SHA-256 establishes a fresh baseline as well, so software upgrades
+do not masquerade as website changes. History files use hashed domain
+directories, atomic writes, and `0600` permissions.
+
+## Cron
+
+Run a watch scan every day and let cron notify on exit status 3:
+
+```cron
+15 7 * * * /opt/homebrew/bin/technograph watch --input /absolute/path/domains.txt --store /absolute/path/history --output /absolute/path/watch.json --fail-on-change
+```
+
+The explicit snapshot workflow remains supported when another system owns
+durable storage:
 
 ```console
 cp snapshots/current.json snapshots/previous.json
@@ -21,7 +34,8 @@ technograph compare snapshots/previous.json snapshots/current.json --output snap
 ```
 
 Use absolute paths and let the surrounding job runner send notifications based
-on `diff.json`. The diff suppresses removals when a current scan is incomplete.
+on `watch.json`, exit status 3, or `diff.json`. Both paths suppress removals
+when a current scan is incomplete.
 
 ## GitHub Actions or another CI scheduler
 
@@ -47,8 +61,7 @@ tools are sufficient. Keep notification credentials outside Technograph.
 
 ## Caching
 
-Scanning remains fresh by default. v0.2 does not persist a result cache because
-stale cache data can hide real changes and complicate evidence timestamps.
-Schedulers that need deduplication should compare versioned snapshots. A future
-cache must include the fingerprint digest, scanner version, network settings,
-and both observation and cache timestamps in its key and output.
+Scanning remains fresh by default. History is not a result cache and never
+avoids HTTP or DNS work. Every `watch` invocation performs a new scan, records
+the observation timestamp, scanner identity, and fingerprint digest, then
+compares only compatible observations.
