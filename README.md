@@ -91,6 +91,7 @@ appear before or after positional domains:
 ```console
 technograph scan stripe.com shopify.com --format json
 technograph explain stripe.com shopify.com
+technograph explore stripe.com shopify.com
 technograph explain stripe.com --pages 3
 technograph scan stripe.com shopify.com --format table
 technograph scan --input domains.txt --format csv --output results.csv
@@ -118,6 +119,12 @@ a detection and therefore do not change the conservative matching behavior.
 for people: detections are grouped with their matching channel and source,
 followed by HTTP/DNS coverage and any partial or blocked conditions. It does
 not introduce a second detection path or an AI-generated confidence score.
+
+`technograph explore` scans once and opens a lightweight interactive terminal
+view over that same report. `filter payments`, `show 1`, `show stripe.com`,
+`list`, and `clear` make live reviews easier without introducing a web
+dashboard, a local server, or another dependency. Use positional domains or
+`--input domains.txt`; standard input is reserved for explorer commands.
 
 `technograph watch` is also one-shot: it compares a fresh scan with compatible
 immutable local history, stores the observation, and exits. Confirmed changes

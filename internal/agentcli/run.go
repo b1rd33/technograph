@@ -32,6 +32,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return runScan(ctx, args[1:], stdin, stdout, stderr, bundledFingerprints)
 	case "explain":
 		return runExplain(ctx, args[1:], stdin, stdout, stderr, bundledFingerprints)
+	case "explore":
+		return runExplore(ctx, args[1:], stdin, stdout, stderr, bundledFingerprints)
 	case "validate":
 		return runValidate(args[1:], stdin, stdout, stderr)
 	case "fingerprints":
@@ -63,6 +65,7 @@ Usage:
 Commands:
   scan          Scan domains and return JSON, JSONL, table, or CSV
   explain       Scan domains and print a human-readable evidence report
+  explore       Interactively browse a completed scan in the terminal
   validate      Validate and normalize domains without network requests
   fingerprints  List or import detection fingerprints
   compare       Compare two structured scan snapshots conservatively
@@ -72,6 +75,7 @@ Commands:
 
 Examples:
   technograph explain stripe.com
+  technograph explore stripe.com shopify.com
   technograph scan stripe.com shopify.com
   technograph scan stripe.com --pages 3
   technograph scan --input domains.txt --output results.json

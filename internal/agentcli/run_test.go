@@ -161,7 +161,7 @@ func TestTopLevelHelpExplainsInterfaces(t *testing.T) {
 }
 
 func TestSubcommandHelpIncludesExamples(t *testing.T) {
-	for _, command := range []string{"scan", "explain", "validate", "fingerprints", "compare", "watch", "history"} {
+	for _, command := range []string{"scan", "explain", "explore", "validate", "fingerprints", "compare", "watch", "history"} {
 		t.Run(command, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			code := Run(context.Background(), []string{command, "--help"}, strings.NewReader(""), &stdout, &stderr, nil)

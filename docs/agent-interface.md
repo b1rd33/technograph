@@ -14,6 +14,7 @@ Scan direct arguments, stdin, or a file:
 ```console
 technograph scan stripe.com shopify.com --format json
 technograph explain stripe.com shopify.com
+technograph explore stripe.com shopify.com
 technograph explain stripe.com --pages 3
 technograph scan stripe.com shopify.com --format table
 technograph scan --input domains.txt --format csv --output results.csv
@@ -55,6 +56,12 @@ When available, `technology_categories` maps detected technology names to
 descriptive categories. This metadata cannot cause a detection. The same data
 appears in fingerprint inventory responses, table output, CSV, and human
 evidence reports.
+
+For a human-led terminal review, `technograph explore` scans once and accepts
+`list`, `filter TEXT`, `clear`, `show NUMBER|DOMAIN`, `help`, and `quit`. It
+reuses the structured scan and deterministic explanation renderer; it is not a
+dashboard and does not start a server. Automation and agents should continue
+to use JSON/JSONL or MCP rather than scripting the interactive prompt.
 
 ### Optional bounded page coverage
 

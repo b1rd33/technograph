@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.8.0 — 2026-08-28
+
+- Add `technograph explore`, a dependency-free interactive terminal evidence
+  explorer that scans once and never starts a web server or dashboard.
+- Support filtering by domain, status, technology, or category and opening the
+  exact deterministic evidence report for a numbered or named domain.
+- Keep direct-domain, file input, custom fingerprints, DNS, safe-network,
+  timeout, and opt-in page coverage controls aligned with the scanner CLI.
+- Add deterministic transcript tests and a scripted live terminal review.
+
 ## v0.7.0 — 2026-08-28
 
 - Add opt-in `--pages 1-5` coverage to `scan`, `explain`, and `watch` while
