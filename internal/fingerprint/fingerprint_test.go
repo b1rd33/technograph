@@ -82,6 +82,48 @@ func TestHeaderAndCookiePatternsTargetNames(t *testing.T) {
 	}
 }
 
+func TestSelectorRequiresMatchingNameBeforeValue(t *testing.T) {
+	t.Parallel()
+	payload := []byte(`{"schema_version":1,"technologies":{"Example":{"patterns":[{"channel":"header","selector":"server","regex":"cloudflare"},{"channel":"cookie","selector":"presence","regex":""}]}}}`)
+	database, warnings, err := Load(payload, true)
+	if err != nil || len(warnings) != 0 {
+		t.Fatalf("Load: warnings=%v error=%v", warnings, err)
+	}
+	engine := NewEngine(database)
+	detected, _ := engine.Detect([]model.Signal{
+		{Channel: model.ChannelHeader, Name: "x-other", Value: "cloudflare"},
+		{Channel: model.ChannelCookie, Name: "other", Value: "presence"},
+	})
+	if len(detected) != 0 {
+		t.Fatalf("wrong selectors detected %v", detected)
+	}
+	detected, evidence := engine.Detect([]model.Signal{
+		{Channel: model.ChannelHeader, Name: "Server", Value: "cloudflare"},
+		{Channel: model.ChannelCookie, Name: "presence", Value: ""},
+	})
+	if strings.Join(detected, "|") != "Example" || len(evidence) != 2 {
+		t.Fatalf("detected=%v evidence=%v", detected, evidence)
+	}
+}
+
+func TestOriginScopeSeparatesScriptSourceAndInlinePatterns(t *testing.T) {
+	t.Parallel()
+	payload := []byte(`{"schema_version":1,"technologies":{"Source":{"patterns":[{"channel":"script","regex":"vendor","origins":["html:script-src","html:script-src-absolute"]}]},"Inline":{"patterns":[{"channel":"script","regex":"vendor","origins":["html:inline-script"]}]}}}`)
+	database, warnings, err := Load(payload, true)
+	if err != nil || len(warnings) != 0 {
+		t.Fatalf("Load: warnings=%v error=%v", warnings, err)
+	}
+	engine := NewEngine(database)
+	detected, _ := engine.Detect([]model.Signal{{Channel: model.ChannelScript, Value: "vendor", Origin: "html:inline-script"}})
+	if strings.Join(detected, "|") != "Inline" {
+		t.Fatalf("inline detected %v", detected)
+	}
+	detected, _ = engine.Detect([]model.Signal{{Channel: model.ChannelScript, Value: "vendor", Origin: "html:script-src-absolute"}})
+	if strings.Join(detected, "|") != "Source" {
+		t.Fatalf("source detected %v", detected)
+	}
+}
+
 func TestChannelIsolation(t *testing.T) {
 	t.Parallel()
 	engine := defaultEngine(t)
@@ -186,6 +228,7 @@ func TestMalformedFingerprintsFailAtLoad(t *testing.T) {
 		rawPayload(t, map[string][]rawPattern{"Empty": {}}),
 		rawPayload(t, map[string][]rawPattern{"Bad channel": {{Channel: "unknown", Regex: "x"}}}),
 		rawPayload(t, map[string][]rawPattern{"Bad target": {{Channel: "html", Regex: "x", Target: "other"}}}),
+		rawPayload(t, map[string][]rawPattern{"Bad origin": {{Channel: "html", Regex: "x", Origins: []string{""}}}}),
 		rawPayload(t, map[string][]rawPattern{"Bad confidence": {{Channel: "html", Regex: `x\;confidence:nope`}}}),
 	}
 	for _, payload := range tests {

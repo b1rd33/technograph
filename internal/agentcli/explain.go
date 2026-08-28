@@ -118,6 +118,9 @@ func renderTechnologies(buffer *bytes.Buffer, result agentapi.DomainResult) {
 		if evidence[left].Channel != evidence[right].Channel {
 			return evidence[left].Channel < evidence[right].Channel
 		}
+		if evidence[left].Selector != evidence[right].Selector {
+			return evidence[left].Selector < evidence[right].Selector
+		}
 		if evidence[left].Origin != evidence[right].Origin {
 			return evidence[left].Origin < evidence[right].Origin
 		}
@@ -133,7 +136,11 @@ func renderTechnologies(buffer *bytes.Buffer, result agentapi.DomainResult) {
 			if item.Technology != technology {
 				continue
 			}
-			fmt.Fprintf(buffer, "      - %s matched %s\n", channelLabel(item.Channel), strconv.Quote(safeText(item.Matched)))
+			selector := ""
+			if item.Selector != "" {
+				selector = " " + strconv.Quote(safeText(item.Selector))
+			}
+			fmt.Fprintf(buffer, "      - %s%s matched %s\n", channelLabel(item.Channel), selector, strconv.Quote(safeText(item.Matched)))
 			fmt.Fprintf(buffer, "        Source: %s; confidence: %d\n", safeText(item.Origin), item.Confidence)
 		}
 	}

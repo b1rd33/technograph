@@ -36,6 +36,8 @@ type Pattern struct {
 	Technology     string
 	Channel        model.Channel
 	Target         model.Part
+	Selector       string
+	Origins        []string
 	Source         string
 	Expression     string
 	Confidence     int
@@ -105,9 +107,11 @@ func (technology *rawTechnology) UnmarshalJSON(data []byte) error {
 }
 
 type rawPattern struct {
-	Channel string `json:"channel"`
-	Regex   string `json:"regex"`
-	Target  string `json:"target,omitempty"`
+	Channel  string   `json:"channel"`
+	Regex    string   `json:"regex"`
+	Target   string   `json:"target,omitempty"`
+	Selector string   `json:"selector,omitempty"`
+	Origins  []string `json:"origins,omitempty"`
 }
 
 // Database is an immutable channel-indexed fingerprint set.
@@ -122,6 +126,8 @@ type Descriptor struct {
 	Technology string        `json:"technology"`
 	Channel    model.Channel `json:"channel"`
 	Target     model.Part    `json:"target"`
+	Selector   string        `json:"selector,omitempty"`
+	Origins    []string      `json:"origins,omitempty"`
 	Pattern    string        `json:"pattern"`
 	Confidence int           `json:"confidence"`
 	Categories []string      `json:"categories,omitempty"`
@@ -140,6 +146,8 @@ func (database *Database) Descriptors() []Descriptor {
 			descriptors = append(descriptors, Descriptor{
 				Technology: pattern.Technology, Channel: pattern.Channel,
 				Target: pattern.Target, Pattern: pattern.Source, Confidence: pattern.Confidence,
+				Selector:   pattern.Selector,
+				Origins:    append([]string(nil), pattern.Origins...),
 				Categories: append([]string(nil), database.categories[pattern.Technology]...),
 			})
 		}
@@ -150,6 +158,15 @@ func (database *Database) Descriptors() []Descriptor {
 		}
 		if descriptors[i].Channel != descriptors[j].Channel {
 			return descriptors[i].Channel < descriptors[j].Channel
+		}
+		if descriptors[i].Selector != descriptors[j].Selector {
+			return descriptors[i].Selector < descriptors[j].Selector
+		}
+		if descriptors[i].Target != descriptors[j].Target {
+			return descriptors[i].Target < descriptors[j].Target
+		}
+		if strings.Join(descriptors[i].Origins, "\x00") != strings.Join(descriptors[j].Origins, "\x00") {
+			return strings.Join(descriptors[i].Origins, "\x00") < strings.Join(descriptors[j].Origins, "\x00")
 		}
 		return descriptors[i].Pattern < descriptors[j].Pattern
 	})
@@ -199,7 +216,12 @@ func Load(data []byte, strict bool) (*Database, []Warning, error) {
 			if err != nil {
 				return nil, nil, fmt.Errorf("technology %q pattern %d: %w", technology, index, err)
 			}
-			target, err := parseTarget(raw.Target, channel)
+			selector := strings.TrimSpace(raw.Selector)
+			origins, err := normalizeOrigins(raw.Origins)
+			if err != nil {
+				return nil, nil, fmt.Errorf("technology %q pattern %d: %w", technology, index, err)
+			}
+			target, err := parseTarget(raw.Target, channel, selector != "")
 			if err != nil {
 				return nil, nil, fmt.Errorf("technology %q pattern %d: %w", technology, index, err)
 			}
@@ -207,7 +229,7 @@ func Load(data []byte, strict bool) (*Database, []Warning, error) {
 			if err != nil {
 				return nil, nil, fmt.Errorf("technology %q pattern %d: %w", technology, index, err)
 			}
-			if expression == "" {
+			if expression == "" && selector == "" {
 				return nil, nil, fmt.Errorf("technology %q pattern %d: regex is empty", technology, index)
 			}
 			compiled, err := regexp.Compile("(?i)" + expression)
@@ -220,7 +242,7 @@ func Load(data []byte, strict bool) (*Database, []Warning, error) {
 				continue
 			}
 			database.byChannel[channel] = append(database.byChannel[channel], Pattern{
-				Technology: technology, Channel: channel, Target: target,
+				Technology: technology, Channel: channel, Target: target, Selector: selector, Origins: origins,
 				Source: raw.Regex, Expression: expression, Confidence: confidence,
 				VersionPattern: version, regex: compiled,
 			})
@@ -231,6 +253,24 @@ func Load(data []byte, strict bool) (*Database, []Warning, error) {
 		return nil, warnings, errors.New("fingerprint database contains no compilable patterns")
 	}
 	return database, warnings, nil
+}
+
+func normalizeOrigins(values []string) ([]string, error) {
+	seen := make(map[string]struct{}, len(values))
+	output := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return nil, errors.New("origin cannot be empty")
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		output = append(output, value)
+	}
+	sort.Strings(output)
+	return output, nil
 }
 
 func normalizeCategories(values []string) ([]string, error) {
@@ -251,8 +291,11 @@ func normalizeCategories(values []string) ([]string, error) {
 	return output, nil
 }
 
-func parseTarget(raw string, channel model.Channel) (model.Part, error) {
+func parseTarget(raw string, channel model.Channel, hasSelector bool) (model.Part, error) {
 	if raw == "" {
+		if hasSelector {
+			return model.PartValue, nil
+		}
 		if channel == model.ChannelHeader || channel == model.ChannelCookie {
 			return model.PartName, nil
 		}
@@ -289,6 +332,20 @@ func parseTags(source string) (expression string, confidence int, version string
 	return strings.Join(expressionParts, `\;`), confidence, version, nil
 }
 
+// ValidateRegex checks Wappalyzer-style pattern tags and RE2 compatibility
+// without constructing a database. Importers use it to report unsupported
+// patterns individually instead of silently rewriting them.
+func ValidateRegex(source string) error {
+	expression, _, _, err := parseTags(source)
+	if err != nil {
+		return err
+	}
+	if _, err := regexp.Compile("(?i)" + expression); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Engine matches structured signals against a compiled database.
 type Engine struct {
 	database *Database
@@ -305,8 +362,14 @@ func (engine *Engine) Detect(signals []model.Signal) ([]string, []model.Evidence
 	evidence := make([]model.Evidence, 0)
 	for _, signal := range signals {
 		for _, pattern := range engine.database.byChannel[signal.Channel] {
+			if len(pattern.Origins) > 0 && !contains(pattern.Origins, signal.Origin) {
+				continue
+			}
+			if pattern.Selector != "" && !strings.EqualFold(signal.Name, pattern.Selector) {
+				continue
+			}
 			text := signal.Text(pattern.Target)
-			if text == "" {
+			if text == "" && pattern.Selector == "" {
 				continue
 			}
 			location := pattern.regex.FindStringIndex(text)
@@ -315,7 +378,7 @@ func (engine *Engine) Detect(signals []model.Signal) ([]string, []model.Evidence
 			}
 			match := text[location[0]:location[1]]
 			detected[pattern.Technology] = struct{}{}
-			key := pattern.Technology + "\x00" + string(pattern.Channel) + "\x00" + pattern.Source
+			key := pattern.Technology + "\x00" + string(pattern.Channel) + "\x00" + pattern.Selector + "\x00" + pattern.Source
 			if _, duplicate := seenEvidence[key]; duplicate {
 				continue
 			}
@@ -323,6 +386,7 @@ func (engine *Engine) Detect(signals []model.Signal) ([]string, []model.Evidence
 			evidence = append(evidence, model.Evidence{
 				Technology: pattern.Technology,
 				Channel:    pattern.Channel,
+				Selector:   pattern.Selector,
 				Pattern:    pattern.Source,
 				Matched:    match,
 				Origin:     signal.Origin,
@@ -342,7 +406,19 @@ func (engine *Engine) Detect(signals []model.Signal) ([]string, []model.Evidence
 		if evidence[i].Channel != evidence[j].Channel {
 			return evidence[i].Channel < evidence[j].Channel
 		}
+		if evidence[i].Selector != evidence[j].Selector {
+			return evidence[i].Selector < evidence[j].Selector
+		}
 		return evidence[i].Pattern < evidence[j].Pattern
 	})
 	return technologies, evidence
+}
+
+func contains(values []string, wanted string) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
 }

@@ -97,6 +97,7 @@ printf 'stripe.com\nshopify.com\n' | technograph scan --format jsonl
 technograph scan --input domains.txt --output snapshot.json
 technograph validate example.com https://invalid.example
 technograph fingerprints
+technograph fingerprints import --input webappanalyzer/src/technologies --output generated.json --report compatibility.json
 technograph compare before.json after.json --output diff.json
 ```
 
@@ -127,6 +128,8 @@ The separate `technograph-mcp` binary serves four local stdio tools:
 ```
 
 See [docs/agent-interface.md](docs/agent-interface.md) for the complete contract,
+[docs/fingerprint-import.md](docs/fingerprint-import.md) for the native
+Wappalyzer adapter and compatibility reports,
 [docs/automation.md](docs/automation.md) for scheduling patterns, and
 [schemas/scan-report.schema.json](schemas/scan-report.schema.json) for the
 machine-readable schema. No Codex/ChatGPT skill is created or required.
@@ -236,6 +239,13 @@ relevant pattern-bearing fields (99.90%). The 14 unsupported JavaScript
 lookaround expressions are reported when loading an external file rather than
 silently rewritten. Full details and methodology are in
 `docs/wappalyzer-compatibility.md`.
+
+`technograph fingerprints import` provides an offline, deterministic adapter
+for native upstream technology files. It preserves exact header, cookie, and
+meta selectors, resolves category IDs when a mapping is supplied, removes
+duplicates, and emits a machine-readable reason for every skipped unsupported
+channel or regex. Generated databases remain opt-in; the small reviewed
+assignment set stays embedded by default.
 
 The scanner implements static HTTP/DNS channels only. Runtime DOM inspection,
 executed JavaScript globals, XHR observation, TLS certificates, robots files,

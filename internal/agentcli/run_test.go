@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -72,6 +74,7 @@ func TestHelpUsesStdoutAndSucceeds(t *testing.T) {
 		{"explain", []string{"explain", "--help"}, "Usage: technograph explain"},
 		{"validate", []string{"validate", "-h"}, "Usage: technograph validate"},
 		{"fingerprints", []string{"fingerprints", "--help"}, "Usage: technograph fingerprints"},
+		{"fingerprint import", []string{"fingerprints", "import", "--help"}, "Usage: technograph fingerprints import"},
 		{"compare", []string{"compare", "-h"}, "Usage: technograph compare"},
 	}
 	for _, test := range tests {
@@ -88,6 +91,41 @@ func TestHelpUsesStdoutAndSucceeds(t *testing.T) {
 				t.Fatalf("stderr = %q", stderr.String())
 			}
 		})
+	}
+}
+
+func TestFingerprintImportWritesNormalizedDatabaseAndReport(t *testing.T) {
+	directory := t.TempDir()
+	input := filepath.Join(directory, "technologies.json")
+	output := filepath.Join(directory, "normalized.json")
+	report := filepath.Join(directory, "compatibility.json")
+	if err := os.WriteFile(input, []byte(`{"Example":{"headers":{"server":"example"},"url":"unsupported"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"fingerprints", "import", "--input", input, "--output", output, "--report", report,
+	}, strings.NewReader(""), &stdout, &stderr, nil)
+	if code != 0 || stdout.Len() != 0 {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	for _, path := range []string{output, report} {
+		data, err := os.ReadFile(path)
+		if err != nil || !json.Valid(data) {
+			t.Fatalf("artifact %s: valid=%v error=%v", path, json.Valid(data), err)
+		}
+	}
+	if !strings.Contains(stderr.String(), "imported 1 technologies and 1 patterns; skipped 1") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = Run(context.Background(), []string{
+		"fingerprints", "import", "--input", input, "--strict", "--output", filepath.Join(directory, "strict.json"),
+	}, strings.NewReader(""), &stdout, &stderr, nil)
+	if code != 1 || !strings.Contains(stderr.String(), "strict import rejected") {
+		t.Fatalf("strict code=%d stderr=%q", code, stderr.String())
 	}
 }
 

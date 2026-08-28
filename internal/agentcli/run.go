@@ -17,6 +17,7 @@ import (
 	"github.com/b1rd33/technograph/internal/agentapi"
 	"github.com/b1rd33/technograph/internal/app"
 	"github.com/b1rd33/technograph/internal/fingerprint"
+	"github.com/b1rd33/technograph/internal/importer"
 	"github.com/b1rd33/technograph/internal/output"
 )
 
@@ -59,7 +60,7 @@ Commands:
   scan          Scan domains and return JSON, JSONL, table, or CSV
   explain       Scan domains and print a human-readable evidence report
   validate      Validate and normalize domains without network requests
-  fingerprints  List the embedded detection fingerprints
+  fingerprints  List or import detection fingerprints
   compare       Compare two structured scan snapshots conservatively
   help          Show this help
 
@@ -317,6 +318,9 @@ Examples:
 }
 
 func runFingerprints(args []string, stdout, stderr io.Writer, bundled []byte) int {
+	if len(args) > 0 && args[0] == "import" {
+		return runFingerprintImport(args[1:], stdout, stderr)
+	}
 	flags := flag.NewFlagSet("technograph fingerprints", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	path := flags.String("fingerprints", "", "external normalized fingerprint JSON")
@@ -325,6 +329,7 @@ func runFingerprints(args []string, stdout, stderr io.Writer, bundled []byte) in
 		subcommandUsage(stdout, "technograph fingerprints [flags]", flags,
 			`Lists the exact fingerprint rules used by the scanner without making network
 requests. External normalized databases can be inspected with --fingerprints.
+Use "technograph fingerprints import --help" for the offline Wappalyzer adapter.
 
 Examples:
   technograph fingerprints
@@ -352,6 +357,62 @@ Examples:
 	return writeValue(agentapi.FingerprintInventory{
 		SchemaVersion: agentapi.SchemaVersion, Count: len(descriptors), Fingerprints: descriptors,
 	}, *outputPath, stdout, stderr)
+}
+
+func runFingerprintImport(args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("technograph fingerprints import", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	input := flags.String("input", "", "native Wappalyzer technology JSON file or directory")
+	categories := flags.String("categories", "", "optional Wappalyzer category mapping JSON")
+	outputPath := flags.String("output", "", "normalized fingerprint output path (default stdout)")
+	reportPath := flags.String("report", "", "optional compatibility report path")
+	strict := flags.Bool("strict", false, "fail when any pattern is skipped")
+	var technologies stringList
+	flags.Var(&technologies, "technology", "technology name to include (repeatable)")
+	if wantsHelp(args) {
+		subcommandUsage(stdout, "technograph fingerprints import [flags]", flags,
+			`Converts native open-source Wappalyzer technology JSON into Technograph's
+normalized format without network access. Supported static channels are HTML,
+script source/inline patterns, headers, cookies, meta, and apex MX/TXT/CNAME.
+Unsupported channels and JavaScript regex features are reported, never rewritten.
+
+Examples:
+  technograph fingerprints import --input src/technologies --output generated.json --report compatibility.json
+  technograph fingerprints import --input technologies.json --categories categories.json --technology Stripe
+  technograph fingerprints import --input src/technologies --strict --output generated.json`)
+		return 0
+	}
+	if flags.Parse(args) != nil || flags.NArg() != 0 {
+		return 2
+	}
+	if *input == "" {
+		fmt.Fprintln(stderr, "technograph: --input is required")
+		return 2
+	}
+	if *outputPath != "" && *outputPath != "-" && *reportPath == *outputPath {
+		fmt.Fprintln(stderr, "technograph: --output and --report must be different paths")
+		return 2
+	}
+	database, report, err := importer.Import(importer.Options{
+		Input: *input, CategoriesPath: *categories, Technologies: technologies,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "technograph: import fingerprints: %v\n", err)
+		return 1
+	}
+	if *reportPath != "" {
+		if code := writeValue(report, *reportPath, stdout, stderr); code != 0 {
+			return code
+		}
+	}
+	fmt.Fprintf(stderr, "technograph: imported %d technologies and %d patterns; skipped %d (%d unsupported regexes, %d duplicates)\n",
+		report.Summary.TechnologiesImported, report.Summary.PatternsImported, report.Summary.PatternsSkipped,
+		report.Summary.UnsupportedRegexes, report.Summary.DuplicatesRemoved)
+	if *strict && report.Summary.PatternsSkipped > 0 {
+		fmt.Fprintln(stderr, "technograph: strict import rejected skipped patterns; see compatibility report")
+		return 1
+	}
+	return writeValue(database, *outputPath, stdout, stderr)
 }
 
 func runCompare(args []string, stdout, stderr io.Writer) int {

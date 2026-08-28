@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/b1rd33/technograph/schemas/import-report.schema.json",
+  "title": "Technograph fingerprint import compatibility report",
+  "type": "object",
+  "required": ["schema_version", "source_files", "summary", "channels", "issues"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "source_files": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "summary": {
+      "type": "object",
+      "required": ["source_files", "technologies_seen", "technologies_imported", "patterns_seen", "patterns_imported", "patterns_skipped", "duplicates_removed", "unsupported_regexes", "unresolved_categories"],
+      "properties": {
+        "source_files": { "type": "integer", "minimum": 0 },
+        "technologies_seen": { "type": "integer", "minimum": 0 },
+        "technologies_imported": { "type": "integer", "minimum": 0 },
+        "patterns_seen": { "type": "integer", "minimum": 0 },
+        "patterns_imported": { "type": "integer", "minimum": 0 },
+        "patterns_skipped": { "type": "integer", "minimum": 0 },
+        "duplicates_removed": { "type": "integer", "minimum": 0 },
+        "unsupported_regexes": { "type": "integer", "minimum": 0 },
+        "unresolved_categories": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "channels": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "message"],
+        "properties": {
+          "kind": { "enum": ["duplicate", "unsupported_channel", "unsupported_regex", "unresolved_category"] },
+          "technology": { "type": "string" },
+          "field": { "type": "string" },
+          "selector": { "type": "string" },
+          "pattern": { "type": "string" },
+          "message": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

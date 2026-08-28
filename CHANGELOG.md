@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.5.0 — 2026-08-28
+
+- Add an offline native Wappalyzer importer for files or complete technology
+  directories, with exact technology filters and optional category resolution.
+- Preserve native header, cookie, and meta selectors before matching values,
+  including empty-pattern presence checks.
+- Validate every imported Wappalyzer tag and regex with RE2, deduplicate exact
+  normalized rules, and emit a deterministic issue for every skipped pattern.
+- Add strict import mode, normalized-database and compatibility-report schemas,
+  full-corpus measurements, and end-to-end generated-database tests.
+
 ## v0.4.0 — 2026-08-28
 
 - Add deterministic table and spreadsheet-safe CSV scan output while retaining

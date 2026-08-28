@@ -60,11 +60,15 @@ evidence reports.
 ```console
 technograph validate example.com https://invalid.example
 technograph fingerprints
+technograph fingerprints import --input webappanalyzer/src/technologies --output generated.json --report compatibility.json
 ```
 
 Validation performs no network access. Fingerprint discovery reports the exact
 embedded rules used by the binary. A local structured CLI invocation may load
 an external normalized database with `--fingerprints`; the MCP server cannot.
+The offline `fingerprints import` adapter can generate that normalized database
+from native Wappalyzer files, but generated data remains local and is never
+accepted through MCP.
 
 ## Snapshots and conservative diffs
 

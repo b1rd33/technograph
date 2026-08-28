@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/b1rd33/technograph/schemas/fingerprint-database.schema.json",
+  "title": "Technograph normalized fingerprint database",
+  "type": "object",
+  "required": ["schema_version", "technologies"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "technologies": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/technology" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "technology": {
+      "type": "object",
+      "required": ["patterns"],
+      "properties": {
+        "categories": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "patterns": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/pattern" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "pattern": {
+      "type": "object",
+      "required": ["channel", "regex"],
+      "properties": {
+        "channel": {
+          "enum": ["header", "script", "cookie", "html", "meta", "js", "dns_txt", "dns_cname", "dns_mx"]
+        },
+        "regex": { "type": "string" },
+        "target": { "enum": ["name", "value"] },
+        "selector": { "type": "string", "minLength": 1 },
+        "origins": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "regex": { "const": "" } }, "required": ["regex"] },
+          "then": { "required": ["selector"] }
+        }
+      ],
+      "additionalProperties": false
+    }
+  }
+}

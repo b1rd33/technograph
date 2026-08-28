@@ -60,6 +60,7 @@ func (signal Signal) Text(target Part) string {
 type Evidence struct {
 	Technology string  `json:"technology"`
 	Channel    Channel `json:"channel"`
+	Selector   string  `json:"selector,omitempty"`
 	Pattern    string  `json:"pattern"`
 	Matched    string  `json:"matched"`
 	Origin     string  `json:"origin"`

@@ -36,6 +36,10 @@ The project will therefore use a normalized internal representation that can
 express both forms structurally: channel, name selector or name pattern, value
 pattern, source expression, confidence, and optional version template.
 
+Since v0.5, native exact selectors are represented explicitly with `selector`
+and are checked before the value regex. This preserves header, cookie, and meta
+presence/value semantics without converting selectors into broader regexes.
+
 ## Pattern-string behavior
 
 The upstream specification states that:
@@ -95,6 +99,10 @@ abstraction. Bundled pattern compilation failures are fatal at startup.
 Unsupported patterns in an optional external database will be reported with
 technology/channel context; they will never be silently translated into a
 different regex because that could create false detections.
+
+The offline native adapter and its deliberately narrower static-channel
+boundary are documented in `fingerprint-import.md`. Its compatibility report
+is the authoritative result for the exact corpus revision being converted.
 
 ## Compatibility statement for README
 
