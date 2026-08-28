@@ -70,7 +70,7 @@ func TestRunnerCapsAutonomousBatchSize(t *testing.T) {
 func TestRunnerReportsSecondaryPageFailureAsPartial(t *testing.T) {
 	service, _, err := app.New(app.Options{
 		FingerprintData: []byte(`{"schema_version":1,"technologies":{"Cloudflare":{"header":"cf-ray"}}}`),
-		HTTP: secondaryFailureHTTP{}, DNS: stubDNS{},
+		HTTP:            secondaryFailureHTTP{}, DNS: stubDNS{},
 	})
 	if err != nil {
 		t.Fatal(err)
