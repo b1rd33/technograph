@@ -29,6 +29,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	switch args[0] {
 	case "scan":
 		return runScan(ctx, args[1:], stdin, stdout, stderr, bundledFingerprints)
+	case "explain":
+		return runExplain(ctx, args[1:], stdin, stdout, stderr, bundledFingerprints)
 	case "validate":
 		return runValidate(args[1:], stdin, stdout, stderr)
 	case "fingerprints":
@@ -49,12 +51,13 @@ func usage(writer io.Writer) {
 	fmt.Fprintln(writer, `Usage:
   technograph [legacy flags] domains.txt
   technograph scan [flags] [domain ...]
+  technograph explain [flags] [domain ...]
   technograph validate [flags] [domain ...]
   technograph fingerprints [flags]
   technograph compare [flags] before.json after.json
 
 Structured commands accept flags before or after domain arguments. When no
-domains are provided, scan and validate read one domain per line from stdin.`)
+domains are provided, scan, explain, and validate read one domain per line from stdin.`)
 }
 
 func wantsHelp(args []string) bool {
@@ -90,6 +93,31 @@ type scanFlags struct {
 	evidence        bool
 	verbose         bool
 	allowPrivateNet bool
+}
+
+func newScanService(config scanFlags, bundled []byte, stderr io.Writer) (*app.Service, error) {
+	fingerprintData, strict, err := loadFingerprintData(config.fingerprints, bundled)
+	if err != nil {
+		return nil, err
+	}
+	level := slog.LevelWarn
+	if config.verbose {
+		level = slog.LevelDebug
+	}
+	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: level}))
+	service, warnings, err := app.New(app.Options{
+		FingerprintData: fingerprintData, StrictFingerprints: strict,
+		Concurrency: config.concurrency, HTTPTimeout: config.httpTimeout, DNSTimeout: config.dnsTimeout,
+		DomainTimeout: max(config.httpTimeout, config.dnsTimeout) + time.Second,
+		SafeNetwork:   !config.allowPrivateNet, Logger: logger,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, warning := range warnings {
+		fmt.Fprintf(stderr, "technograph: warning: %v\n", warning)
+	}
+	return service, nil
 }
 
 func runScan(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, bundled []byte) int {
@@ -136,30 +164,12 @@ func runScan(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 		fmt.Fprintf(stderr, "technograph: %v\n", err)
 		return 1
 	}
-	fingerprintData, strict, err := loadFingerprintData(config.fingerprints, bundled)
-	if err != nil {
-		fmt.Fprintf(stderr, "technograph: %v\n", err)
-		return 1
-	}
-	level := slog.LevelWarn
-	if config.verbose {
-		level = slog.LevelDebug
-	}
-	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: level}))
-	service, warnings, err := app.New(app.Options{
-		FingerprintData: fingerprintData, StrictFingerprints: strict,
-		Concurrency: config.concurrency, HTTPTimeout: config.httpTimeout, DNSTimeout: config.dnsTimeout,
-		DomainTimeout: max(config.httpTimeout, config.dnsTimeout) + time.Second,
-		SafeNetwork:   !config.allowPrivateNet, Logger: logger,
-	})
+	service, err := newScanService(config, bundled, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "technograph: %v\n", err)
 		return 1
 	}
 	defer service.Close()
-	for _, warning := range warnings {
-		fmt.Fprintf(stderr, "technograph: warning: %v\n", warning)
-	}
 	runner := agentapi.Runner{Service: service, MaxDomains: agentapi.DefaultMaxDomains}
 	if config.format == "jsonl" {
 		return writeJSONL(ctx, runner, inputs, config, stdout, stderr)

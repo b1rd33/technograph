@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add `technograph explain` for deterministic human-readable technology
+  evidence, HTTP/DNS coverage, and partial or blocked scan diagnostics.
+
 ## v0.2.2 — 2026-08-27
 
 - Retry partially decoded UDP DNS responses over TCP without extending the

@@ -88,6 +88,7 @@ appear before or after positional domains:
 
 ```console
 technograph scan stripe.com shopify.com --format json
+technograph explain stripe.com shopify.com
 printf 'stripe.com\nshopify.com\n' | technograph scan --format jsonl
 technograph scan --input domains.txt --output snapshot.json
 technograph validate example.com https://invalid.example
@@ -99,6 +100,11 @@ JSON output uses schema version `1.0` and gives every input an `ok`, `partial`,
 `blocked`, `failed`, or `invalid` status plus typed warnings/errors. JSONL emits
 domain results in actual completion order. Logs stay on stderr, so stdout is
 safe to pipe into agents and automation.
+
+`technograph explain` runs the same evidence-based scan but formats the result
+for people: detections are grouped with their matching channel and source,
+followed by HTTP/DNS coverage and any partial or blocked conditions. It does
+not introduce a second detection path or an AI-generated confidence score.
 
 The separate `technograph-mcp` binary serves four local stdio tools:
 `scan_domain`, `scan_domains`, `validate_domain`, and `list_fingerprints`.

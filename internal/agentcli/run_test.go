@@ -69,6 +69,7 @@ func TestHelpUsesStdoutAndSucceeds(t *testing.T) {
 		{"top-level long", []string{"--help"}, "technograph scan"},
 		{"top-level short", []string{"-h"}, "technograph validate"},
 		{"scan", []string{"scan", "--help"}, "Usage: technograph scan"},
+		{"explain", []string{"explain", "--help"}, "Usage: technograph explain"},
 		{"validate", []string{"validate", "-h"}, "Usage: technograph validate"},
 		{"fingerprints", []string{"fingerprints", "--help"}, "Usage: technograph fingerprints"},
 		{"compare", []string{"compare", "-h"}, "Usage: technograph compare"},

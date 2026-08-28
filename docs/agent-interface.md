@@ -13,9 +13,15 @@ Scan direct arguments, stdin, or a file:
 
 ```console
 technograph scan stripe.com shopify.com --format json
+technograph explain stripe.com shopify.com
 printf 'stripe.com\nshopify.com\n' | technograph scan --format jsonl
 technograph scan --input domains.txt --output snapshot.json
 ```
+
+`technograph explain` runs the same scanner and presents its typed status,
+technology evidence, HTTP/DNS coverage, and issues as deterministic plain text.
+It is intended for terminal exploration and live reviews; automation should
+continue to consume the versioned JSON or JSONL interfaces.
 
 Flags may appear before or after domains. JSON is written to stdout by default;
 all logs and warnings use stderr. `--output -` also means stdout. JSONL emits a
