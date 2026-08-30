@@ -73,11 +73,22 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, bundledFi
 	fingerprintData := bundledFingerprints
 	strict := true
 	if *fingerprintPath != "" {
-		fingerprintData, err = os.ReadFile(*fingerprintPath)
-		if err != nil {
-			fmt.Fprintf(stderr, "technograph: read fingerprints: %v\n", err)
+		file, openErr := os.Open(*fingerprintPath)
+		if openErr != nil {
+			fmt.Fprintf(stderr, "technograph: read fingerprints: %v\n", openErr)
 			return 1
 		}
+		data, readErr := io.ReadAll(io.LimitReader(file, 10<<20+1))
+		_ = file.Close()
+		if readErr != nil {
+			fmt.Fprintf(stderr, "technograph: read fingerprints: %v\n", readErr)
+			return 1
+		}
+		if len(data) > 10<<20 {
+			fmt.Fprintf(stderr, "technograph: fingerprint file exceeds %d bytes\n", 10<<20)
+			return 1
+		}
+		fingerprintData = data
 		strict = false
 	}
 	level := slog.LevelWarn

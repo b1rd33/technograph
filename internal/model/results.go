@@ -5,34 +5,36 @@ import "time"
 // HTTPResult contains diagnostics for one homepage request. These fields are
 // used by logs and the optional evidence report, not the required output JSON.
 type HTTPResult struct {
-	RequestedURL  string           `json:"requested_url,omitempty"`
-	FinalURL      string           `json:"final_url,omitempty"`
-	StatusCode    int              `json:"status_code,omitempty"`
-	Redirects     int              `json:"redirects"`
-	ContentType   string           `json:"content_type,omitempty"`
-	BodyBytes     int              `json:"body_bytes"`
-	BodyTruncated bool             `json:"body_truncated"`
-	Blocked       bool             `json:"blocked"`
-	Challenge     bool             `json:"challenge"`
-	BlockReason   string           `json:"block_reason,omitempty"`
-	Error         string           `json:"error,omitempty"`
-	PageCount     int              `json:"page_count,omitempty"`
-	Pages         []HTTPPageResult `json:"pages,omitempty"`
+	RequestedURL     string           `json:"requested_url,omitempty"`
+	FinalURL         string           `json:"final_url,omitempty"`
+	StatusCode       int              `json:"status_code,omitempty"`
+	Redirects        int              `json:"redirects"`
+	ContentType      string           `json:"content_type,omitempty"`
+	BodyBytes        int              `json:"body_bytes"`
+	BodyTruncated    bool             `json:"body_truncated"`
+	SignalsTruncated bool             `json:"signals_truncated,omitempty"`
+	Blocked          bool             `json:"blocked"`
+	Challenge        bool             `json:"challenge"`
+	BlockReason      string           `json:"block_reason,omitempty"`
+	Error            string           `json:"error,omitempty"`
+	PageCount        int              `json:"page_count,omitempty"`
+	Pages            []HTTPPageResult `json:"pages,omitempty"`
 }
 
 // HTTPPageResult records one opt-in secondary page fetch.
 type HTTPPageResult struct {
-	RequestedURL  string `json:"requested_url"`
-	FinalURL      string `json:"final_url,omitempty"`
-	StatusCode    int    `json:"status_code,omitempty"`
-	Redirects     int    `json:"redirects"`
-	ContentType   string `json:"content_type,omitempty"`
-	BodyBytes     int    `json:"body_bytes"`
-	BodyTruncated bool   `json:"body_truncated"`
-	Blocked       bool   `json:"blocked"`
-	Challenge     bool   `json:"challenge"`
-	BlockReason   string `json:"block_reason,omitempty"`
-	Error         string `json:"error,omitempty"`
+	RequestedURL     string `json:"requested_url"`
+	FinalURL         string `json:"final_url,omitempty"`
+	StatusCode       int    `json:"status_code,omitempty"`
+	Redirects        int    `json:"redirects"`
+	ContentType      string `json:"content_type,omitempty"`
+	BodyBytes        int    `json:"body_bytes"`
+	BodyTruncated    bool   `json:"body_truncated"`
+	SignalsTruncated bool   `json:"signals_truncated,omitempty"`
+	Blocked          bool   `json:"blocked"`
+	Challenge        bool   `json:"challenge"`
+	BlockReason      string `json:"block_reason,omitempty"`
+	Error            string `json:"error,omitempty"`
 }
 
 // DNSResult contains normalized apex records and per-type diagnostics.

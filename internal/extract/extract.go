@@ -14,6 +14,13 @@ import (
 
 const maxInlineScriptBytes = 256 * 1024
 
+const (
+	maxLinksPerPage   = 5000
+	maxSignalsPerPage = 5000
+	maxInlineScripts  = 50
+	maxWindowNames    = 512
+)
+
 var (
 	windowDot     = regexp.MustCompile(`\bwindow\s*\.\s*([A-Za-z_$][A-Za-z0-9_$]*)`)
 	windowBracket = regexp.MustCompile(`\bwindow\s*\[\s*["']([^"'\]]{1,100})["']\s*\]`)
@@ -86,16 +93,20 @@ func Cookies(cookies []*http.Cookie) []model.Signal {
 // Document statically extracts raw HTML, script URLs, inline source, meta
 // fields, and syntactic window.* references. JavaScript is never executed.
 func Document(body []byte, baseURL *url.URL) ([]model.Signal, error) {
-	signals, _, err := DocumentWithLinks(body, baseURL)
+	signals, _, _, err := DocumentWithLinks(body, baseURL)
 	return signals, err
 }
 
 // DocumentWithLinks extracts the same static signals plus resolved anchor URLs
 // for the bounded opt-in crawler. It does not fetch or execute anything.
-func DocumentWithLinks(body []byte, baseURL *url.URL) ([]model.Signal, []string, error) {
+func DocumentWithLinks(body []byte, baseURL *url.URL) ([]model.Signal, []string, bool, error) {
+	return documentWithLinksInternal(body, baseURL)
+}
+
+func documentWithLinksInternal(body []byte, baseURL *url.URL) ([]model.Signal, []string, bool, error) {
 	document, err := html.Parse(bytes.NewReader(body))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 	signals := []model.Signal{{
 		Channel: model.ChannelHTML,
@@ -104,31 +115,50 @@ func DocumentWithLinks(body []byte, baseURL *url.URL) ([]model.Signal, []string,
 	}}
 	windowNames := make(map[string]struct{})
 	links := make([]string, 0)
+	truncated := false
 
 	var walk func(*html.Node)
+	inlineCount := 0
 	walk = func(node *html.Node) {
 		if node.Type == html.ElementNode {
 			switch strings.ToLower(node.Data) {
 			case "a":
-				if resolved := resolveDocumentURL(baseURL, attribute(node, "href")); resolved != "" {
-					links = append(links, resolved)
+				if len(links) >= maxLinksPerPage {
+					truncated = true
+				} else {
+					if resolved := resolveDocumentURL(baseURL, attribute(node, "href")); resolved != "" {
+						links = append(links, resolved)
+					}
 				}
 			case "script":
 				source := attribute(node, "src")
 				if source != "" {
+					if len(signals) >= maxSignalsPerPage {
+						truncated = true
+						break
+					}
 					signals = append(signals, model.Signal{
 						Channel: model.ChannelScript,
 						Value:   source,
 						Origin:  "html:script-src",
 					})
-					if resolved := resolveScriptURL(baseURL, source); resolved != "" && resolved != source {
-						signals = append(signals, model.Signal{
-							Channel: model.ChannelScript,
-							Value:   resolved,
-							Origin:  "html:script-src-absolute",
-						})
+					if len(signals) >= maxSignalsPerPage {
+						truncated = true
+					} else {
+						if resolved := resolveScriptURL(baseURL, source); resolved != "" && resolved != source {
+							signals = append(signals, model.Signal{
+								Channel: model.ChannelScript,
+								Value:   resolved,
+								Origin:  "html:script-src-absolute",
+							})
+						}
 					}
 				} else {
+					if inlineCount >= maxInlineScripts || len(signals) >= maxSignalsPerPage {
+						truncated = true
+						break
+					}
+					inlineCount++
 					script := boundedText(node, maxInlineScriptBytes)
 					if script != "" {
 						signals = append(signals, model.Signal{
@@ -136,10 +166,16 @@ func DocumentWithLinks(body []byte, baseURL *url.URL) ([]model.Signal, []string,
 							Value:   script,
 							Origin:  "html:inline-script",
 						})
-						collectWindowNames(script, windowNames)
+						if collectWindowNames(script, windowNames) {
+							truncated = true
+						}
 					}
 				}
 			case "meta":
+				if len(signals) >= maxSignalsPerPage {
+					truncated = true
+					break
+				}
 				name := firstNonEmpty(
 					attribute(node, "name"),
 					attribute(node, "property"),
@@ -169,6 +205,10 @@ func DocumentWithLinks(body []byte, baseURL *url.URL) ([]model.Signal, []string,
 	}
 	sort.Strings(names)
 	for _, name := range names {
+		if len(signals) >= maxSignalsPerPage {
+			truncated = true
+			break
+		}
 		signals = append(signals, model.Signal{
 			Channel: model.ChannelJS,
 			Name:    name,
@@ -176,7 +216,7 @@ func DocumentWithLinks(body []byte, baseURL *url.URL) ([]model.Signal, []string,
 			Origin:  "html:window-global-syntax",
 		})
 	}
-	return signals, links, nil
+	return signals, links, truncated, nil
 }
 
 func attribute(node *html.Node, key string) string {
@@ -226,13 +266,31 @@ func boundedText(node *html.Node, limit int) string {
 	return strings.TrimSpace(builder.String())
 }
 
-func collectWindowNames(script string, names map[string]struct{}) {
+func collectWindowNames(script string, names map[string]struct{}) bool {
+	truncated := false
 	for _, match := range windowDot.FindAllStringSubmatch(script, -1) {
-		names[match[1]] = struct{}{}
+		key := match[1]
+		if _, exists := names[key]; exists {
+			continue
+		}
+		if len(names) >= maxWindowNames {
+			truncated = true
+			continue
+		}
+		names[key] = struct{}{}
 	}
 	for _, match := range windowBracket.FindAllStringSubmatch(script, -1) {
-		names[match[1]] = struct{}{}
+		key := match[1]
+		if _, exists := names[key]; exists {
+			continue
+		}
+		if len(names) >= maxWindowNames {
+			truncated = true
+			continue
+		}
+		names[key] = struct{}{}
 	}
+	return truncated
 }
 
 func firstNonEmpty(values ...string) string {

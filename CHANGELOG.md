@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.1.0 — 2026-08-30
+
+- HTML extraction budgets: cap derived links (5,000), signals (5,000),
+  inline scripts (50) and window names (512) per page; preserve `html:body`
+  as the first signal. Truncation sets `http.signals_truncated` and, via
+  `Runner`, a `SIGNALS_TRUNCATED` warning with `partial` status, including
+  for opt-in secondary pages (`http.pages[].signals_truncated`).
+- HTTP metadata budgets: `MaxResponseHeaderBytes=1 MiB`, header signals capped
+  at 128, cookies at 100 / 4 KiB each / 32 KiB cumulatively across redirects
+  (bounded jar with global counters including names/domain/path and a
+  `truncated` flag). Oversize or dropped headers/cookies set
+  `signals_truncated`.
+- External fingerprint budgets: `10 MiB` file via bounded `LimitReader`,
+  `20,000` technologies, `100,000` patterns, `2,048 B` regex; preserves
+  compatibility with the full Wappalyzer corpus (`5,862 techs / 7,665 pats`).
+- Safe-network IPv6: add 7 never-public prefixes (`64:ff9b:1::/48`,
+  `fec0::/10`, `2002::/16`, `2001:10::/28`, `2001:20::/28`, `2001::/32`,
+  `192.88.99.0/24`) with table-driven `IsPublic` tests; public IPv4/IPv6
+  remain accepted.
+- Domain suffix: document the open policy choice in `README.md`,
+  `docs/agent-interface.md` and `internal/domain/domain.go` — `service.internal`
+  parses but HTTP to private addresses is blocked while DNS queries are still
+  sent; no behavior change until an explicit strict/allow decision.
+- Supply-chain: pin `actions/checkout`, `actions/setup-go` and
+  `goreleaser/goreleaser-action` to immutable SHAs with version comments.
+
 ## v1.0.1 — 2026-08-30
 
 - Harden legacy networking: `technograph domains.txt` now uses `SafeNetwork: true`

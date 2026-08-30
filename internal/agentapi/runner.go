@@ -154,6 +154,12 @@ func (runner Runner) convertResult(index int, input string, scanned model.ScanRe
 		ElapsedMS: scanned.ElapsedMS,
 	}
 	result.TechnologyCategories = runner.Service.CategoriesFor(result.Technologies)
+	if scanned.HTTP.SignalsTruncated {
+		result.Warnings = append(result.Warnings, Issue{Code: "SIGNALS_TRUNCATED", Message: "extraction truncated due to resource limits; detection may be incomplete", Channel: "http"})
+		if result.Status == StatusOK {
+			result.Status = StatusPartial
+		}
+	}
 	if scanned.HTTP.BodyTruncated {
 		result.Warnings = append(result.Warnings, Issue{Code: "BODY_TRUNCATED", Message: "response body exceeded the configured limit", Channel: "http"})
 	}

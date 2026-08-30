@@ -18,6 +18,9 @@ func TestIsPublic(t *testing.T) {
 		{"127.0.0.1", false}, {"10.1.2.3", false}, {"169.254.169.254", false},
 		{"100.64.0.1", false}, {"192.0.2.1", false}, {"::1", false},
 		{"fc00::1", false}, {"fe80::1", false}, {"2001:db8::1", false},
+		{"64:ff9b:1::1", false}, {"fec0::1", false}, {"2002::1", false},
+		{"2001:10::1", false}, {"2001:20::1", false}, {"2001::1", false},
+		{"192.88.99.1", false},
 	}
 	for _, test := range tests {
 		t.Run(test.address, func(t *testing.T) {

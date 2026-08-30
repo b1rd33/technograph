@@ -18,6 +18,15 @@ const maxDomainLineBytes = 4096
 
 // Parse validates one bare domain and derives its registrable apex.
 func Parse(raw string) (model.Domain, error) {
+	// Domain suffix policy: autonomous scans are intended for public domains only
+	// (see README Architecture / docs/agent-interface). Names such as
+	// service.internal currently validate via PublicSuffix (unknown TLD → apex
+	// derived) and rely on SafeDialer to block private HTTP. DNS queries for
+	// those names are still sent to the resolver, so .internal scans leak DNS.
+	// Open decision: choose
+	//   A) strict public mode — reject reserved/non-public suffixes, or
+	//   B) preserve internal-domain support and document the DNS exposure.
+	// Until decided, behavior is unchanged.
 	value := strings.TrimSpace(raw)
 	if value == "" {
 		return model.Domain{}, errors.New("domain is empty")

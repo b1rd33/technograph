@@ -274,6 +274,12 @@ only ports 80/443, and ignores proxy environment variables. A clearly named
 it is deliberately unavailable through MCP. MCP also caps each request and
 global active work at 20 domains and accepts only embedded fingerprints.
 
+Autonomous scans are intended for public domains. Names under reserved or
+unmanaged suffixes (for example `service.internal`) will parse but, while
+HTTP to private addresses is blocked, their DNS queries are still sent to
+the resolver. Treat such names as unsuitable where DNS disclosure matters
+until a strict public-suffix policy is adopted.
+
 Local CLI users may opt into a resolver with repeatable `--dns-server
 IP[:port]` flags (or `-dns-server` in legacy mode). Literal IPv4/IPv6 addresses
 are required. Custom resolvers should be treated as parties that can observe

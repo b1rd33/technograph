@@ -71,7 +71,7 @@ func TestDocumentToleratesMalformedHTML(t *testing.T) {
 func TestDocumentWithLinksResolvesNavigationCandidates(t *testing.T) {
 	t.Parallel()
 	base, _ := url.Parse("https://example.com/products/")
-	_, links, err := DocumentWithLinks([]byte(`<a href="../pricing?source=nav#plans">Pricing</a>
+	_, links, _, err := DocumentWithLinks([]byte(`<a href="../pricing?source=nav#plans">Pricing</a>
 		<a href="https://other.example/contact">External</a><a href="#top">Top</a>`), base)
 	if err != nil {
 		t.Fatalf("DocumentWithLinks: %v", err)

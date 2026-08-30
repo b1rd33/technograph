@@ -177,6 +177,14 @@ every redirect through the same dial policy, limits ports to 80/443, and ignores
 proxy environment variables. These controls also protect against common DNS
 rebinding paths. Host headers and TLS SNI retain the original public hostname.
 
+Autonomous scans are intended for public domains. Names under reserved or
+unmanaged suffixes (for example `service.internal`) currently parse as bare
+domains and rely on the network policy: HTTP connections to private addresses
+are blocked, but DNS queries for those names are still sent to the configured
+resolver (system or `--dns-server`). Until a strict public-suffix policy is
+adopted, internal-domain scans should not be used where DNS disclosure is a
+concern.
+
 The structured CLI applies the same network policy by default. Its explicit
 `--allow-private-network` option exists only for trusted local testing and is
 not available through MCP.

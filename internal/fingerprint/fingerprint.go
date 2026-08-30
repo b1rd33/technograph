@@ -12,6 +12,13 @@ import (
 	"github.com/b1rd33/technograph/internal/model"
 )
 
+const (
+	maxFingerprintBytes = 10 << 20
+	maxTechnologies     = 20000
+	maxPatterns         = 100000
+	maxRegexLength      = 2048
+)
+
 // Warning describes a pattern skipped while loading a non-strict external
 // database.
 type Warning struct {
@@ -182,6 +189,9 @@ func (database *Database) Categories(technology string) []string {
 // for bundled data and rejects any unsupported regex. Non-strict mode skips
 // unsupported expressions but returns a warning for every skipped pattern.
 func Load(data []byte, strict bool) (*Database, []Warning, error) {
+	if len(data) > maxFingerprintBytes {
+		return nil, nil, fmt.Errorf("fingerprint database exceeds %d bytes", maxFingerprintBytes)
+	}
 	var source rawFile
 	if err := json.Unmarshal(data, &source); err != nil {
 		return nil, nil, fmt.Errorf("decode fingerprints: %w", err)
@@ -192,9 +202,19 @@ func Load(data []byte, strict bool) (*Database, []Warning, error) {
 	if len(source.Technologies) == 0 {
 		return nil, nil, errors.New("fingerprint database contains no technologies")
 	}
+	if len(source.Technologies) > maxTechnologies {
+		return nil, nil, fmt.Errorf("too many technologies: %d (limit %d)", len(source.Technologies), maxTechnologies)
+	}
 
 	database := &Database{byChannel: make(map[model.Channel][]Pattern), categories: make(map[string][]string)}
 	warnings := make([]Warning, 0)
+	totalPatterns := 0
+	for _, definition := range source.Technologies {
+		totalPatterns += len(definition.Patterns)
+	}
+	if totalPatterns > maxPatterns {
+		return nil, nil, fmt.Errorf("too many patterns: %d (limit %d)", totalPatterns, maxPatterns)
+	}
 	technologyNames := make([]string, 0, len(source.Technologies))
 	for technology := range source.Technologies {
 		technologyNames = append(technologyNames, technology)
@@ -228,6 +248,9 @@ func Load(data []byte, strict bool) (*Database, []Warning, error) {
 			expression, confidence, version, err := parseTags(raw.Regex)
 			if err != nil {
 				return nil, nil, fmt.Errorf("technology %q pattern %d: %w", technology, index, err)
+			}
+			if len(expression) > maxRegexLength {
+				return nil, nil, fmt.Errorf("technology %q pattern %d: regex exceeds %d bytes", technology, index, maxRegexLength)
 			}
 			if expression == "" && selector == "" {
 				return nil, nil, fmt.Errorf("technology %q pattern %d: regex is empty", technology, index)

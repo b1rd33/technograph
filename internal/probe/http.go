@@ -27,6 +27,10 @@ const (
 	defaultMaxBodyBytes = 2 * 1024 * 1024
 	defaultMaxRedirects = 10
 	maximumPageLimit    = 5
+	maxResponseHeaderKB = 1 << 20
+	maxCookies          = 100
+	maxCookieValueLen   = 4096
+	maxCookieBytes      = 32 << 10
 	userAgent           = "technograph/1.0 (HTTP-only technology detector)"
 )
 
@@ -87,15 +91,16 @@ func NewHTTPProbe(options HTTPOptions) *HTTPProbe {
 			proxy = nil
 		}
 		options.Transport = &http.Transport{
-			Proxy:                 proxy,
-			DialContext:           dialContext,
-			ForceAttemptHTTP2:     true,
-			MaxIdleConns:          40,
-			MaxIdleConnsPerHost:   4,
-			IdleConnTimeout:       60 * time.Second,
-			TLSHandshakeTimeout:   min(options.Timeout, 5*time.Second),
-			ResponseHeaderTimeout: options.Timeout,
-			TLSClientConfig:       &tls.Config{InsecureSkipVerify: options.InsecureTLS}, //nolint:gosec -- explicit CLI option
+			Proxy:                  proxy,
+			DialContext:            dialContext,
+			ForceAttemptHTTP2:      true,
+			MaxIdleConns:           40,
+			MaxIdleConnsPerHost:    4,
+			IdleConnTimeout:        60 * time.Second,
+			TLSHandshakeTimeout:    min(options.Timeout, 5*time.Second),
+			ResponseHeaderTimeout:  options.Timeout,
+			MaxResponseHeaderBytes: int64(maxResponseHeaderKB),
+			TLSClientConfig:        &tls.Config{InsecureSkipVerify: options.InsecureTLS}, //nolint:gosec -- explicit CLI option
 		}
 	}
 	return &HTTPProbe{
@@ -140,10 +145,7 @@ func (probe *HTTPProbe) Probe(ctx context.Context, hostname string) (model.HTTPR
 
 func (probe *HTTPProbe) attempt(ctx context.Context, target, allowedHost string) (model.HTTPResult, []model.Signal, []string, error) {
 	result := model.HTTPResult{RequestedURL: target}
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return result, nil, nil, fmt.Errorf("create cookie jar: %w", err)
-	}
+	jar := &boundedJar{jar: newJar(), maxCookies: maxCookies, maxCookieBytes: maxCookieBytes}
 	redirects := 0
 	client := &http.Client{
 		Transport: probe.transport,
@@ -191,19 +193,35 @@ func (probe *HTTPProbe) attempt(ctx context.Context, target, allowedHost string)
 	result.BodyBytes = len(body)
 
 	signals := extract.Headers(response.Header)
-	signals = append(signals, extract.Cookies(jar.Cookies(response.Request.URL))...)
+	origHeaderCount := len(signals)
+	signals = limitHeaders(signals)
+	if len(signals) < origHeaderCount {
+		result.SignalsTruncated = true
+	}
+	cookieSignals := extract.Cookies(jar.Cookies(response.Request.URL))
+	origCookieCount := len(cookieSignals)
+	cookieSignals = limitCookies(cookieSignals)
+	if len(cookieSignals) < origCookieCount || jar.Truncated() {
+		result.SignalsTruncated = true
+	}
+	signals = append(signals, cookieSignals...)
 	result.Blocked, result.Challenge, result.BlockReason = classifyResponse(response.StatusCode, response.Header, body)
 	if result.Blocked {
 		probe.logger.Warn("HTTP response blocked", "url", result.FinalURL, "reason", result.BlockReason)
 	}
+	extractTruncated := false
 	links := []string{}
 	if response.StatusCode < http.StatusBadRequest && !result.Challenge && isHTMLResponse(response.Header.Get("Content-Type"), body) {
-		documentSignals, documentLinks, parseErr := extract.DocumentWithLinks(body, response.Request.URL)
+		documentSignals, documentLinks, docTruncated, parseErr := extract.DocumentWithLinks(body, response.Request.URL)
 		if parseErr != nil {
 			return result, signals, nil, fmt.Errorf("parse %s: %w", result.FinalURL, parseErr)
 		}
+		extractTruncated = docTruncated
 		signals = append(signals, documentSignals...)
 		links = documentLinks
+	}
+	if extractTruncated {
+		result.SignalsTruncated = true
 	}
 	return result, signals, links, nil
 }
@@ -269,6 +287,9 @@ func (probe *HTTPProbe) crawl(ctx context.Context, result model.HTTPResult, sign
 		}
 		result.Pages = append(result.Pages, secondaryPage(page))
 		result.PageCount++
+		if page.SignalsTruncated {
+			result.SignalsTruncated = true
+		}
 		if err != nil {
 			continue
 		}
@@ -293,7 +314,7 @@ func secondaryPage(result model.HTTPResult) model.HTTPPageResult {
 		RequestedURL: result.RequestedURL, FinalURL: result.FinalURL,
 		StatusCode: result.StatusCode, Redirects: result.Redirects,
 		ContentType: result.ContentType, BodyBytes: result.BodyBytes,
-		BodyTruncated: result.BodyTruncated, Blocked: result.Blocked,
+		BodyTruncated: result.BodyTruncated, SignalsTruncated: result.SignalsTruncated, Blocked: result.Blocked,
 		Challenge: result.Challenge, BlockReason: result.BlockReason, Error: result.Error,
 	}
 }
@@ -418,4 +439,115 @@ func isTransportFailure(err error) bool {
 	}
 	var certificateError x509.CertificateInvalidError
 	return errors.As(err, &certificateError)
+}
+
+func limitCookies(signals []model.Signal) []model.Signal {
+	if len(signals) <= maxCookies {
+		total := 0
+		for _, s := range signals {
+			total += len(s.Value)
+		}
+		if total <= maxCookieBytes {
+			need := false
+			for _, s := range signals {
+				if len(s.Value) > maxCookieValueLen {
+					need = true
+					break
+				}
+			}
+			if !need {
+				return signals
+			}
+		}
+	}
+	limited := make([]model.Signal, 0, min(len(signals), maxCookies))
+	total := 0
+	for _, s := range signals {
+		if len(limited) >= maxCookies {
+			break
+		}
+		if len(s.Value) > maxCookieValueLen {
+			s.Value = s.Value[:maxCookieValueLen]
+		}
+		if total+len(s.Value) > maxCookieBytes {
+			break
+		}
+		total += len(s.Value)
+		limited = append(limited, s)
+	}
+	return limited
+}
+
+func limitHeaders(signals []model.Signal) []model.Signal {
+	if len(signals) <= 128 {
+		return signals
+	}
+	return signals[:128]
+}
+
+func newJar() http.CookieJar {
+	jar, _ := cookiejar.New(nil)
+	return jar
+}
+
+type boundedJar struct {
+	jar            http.CookieJar
+	maxCookies     int
+	maxCookieBytes int
+	admittedCount  int
+	admittedBytes  int
+	truncated      bool
+}
+
+func (jar *boundedJar) Truncated() bool {
+	return jar.truncated
+}
+
+func (jar *boundedJar) Cookies(u *url.URL) []*http.Cookie {
+	if jar.jar == nil {
+		return nil
+	}
+	return jar.jar.Cookies(u)
+}
+
+func (jar *boundedJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
+	if jar.jar == nil {
+		return
+	}
+	if jar.admittedCount >= jar.maxCookies || jar.admittedBytes >= jar.maxCookieBytes {
+		if len(cookies) > 0 {
+			jar.truncated = true
+		}
+		return
+	}
+	allowed := make([]*http.Cookie, 0, len(cookies))
+	for _, c := range cookies {
+		if jar.admittedCount >= jar.maxCookies {
+			jar.truncated = true
+			break
+		}
+		sizeValue := c.Value
+		if len(sizeValue) > maxCookieValueLen {
+			sizeValue = sizeValue[:maxCookieValueLen]
+		}
+		cookieSize := len(c.Name) + len(c.Domain) + len(c.Path) + len(sizeValue)
+		if jar.admittedBytes+cookieSize > jar.maxCookieBytes {
+			jar.truncated = true
+			break
+		}
+		didTruncateValue := len(c.Value) > maxCookieValueLen
+		if didTruncateValue {
+			clone := *c
+			clone.Value = clone.Value[:maxCookieValueLen]
+			c = &clone
+			jar.truncated = true
+		}
+		allowed = append(allowed, c)
+		jar.admittedCount++
+		jar.admittedBytes += len(c.Name) + len(c.Domain) + len(c.Path) + len(c.Value)
+	}
+	if len(allowed) == 0 {
+		return
+	}
+	jar.jar.SetCookies(u, allowed)
 }

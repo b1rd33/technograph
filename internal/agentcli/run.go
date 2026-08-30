@@ -553,9 +553,17 @@ func loadFingerprintData(path string, bundled []byte) ([]byte, bool, error) {
 	if path == "" {
 		return bundled, true, nil
 	}
-	data, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return nil, false, fmt.Errorf("read fingerprints: %w", err)
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, 10<<20+1))
+	if err != nil {
+		return nil, false, fmt.Errorf("read fingerprints: %w", err)
+	}
+	if len(data) > 10<<20 {
+		return nil, false, fmt.Errorf("fingerprint file exceeds %d bytes", 10<<20)
 	}
 	return data, false, nil
 }

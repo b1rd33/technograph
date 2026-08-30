@@ -15,7 +15,7 @@ func BenchmarkDocumentExtraction(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		signals, links, err := DocumentWithLinks(body, base)
+		signals, links, _, err := DocumentWithLinks(body, base)
 		if err != nil || len(signals) == 0 || len(links) == 0 {
 			b.Fatalf("signals=%d links=%d error=%v", len(signals), len(links), err)
 		}
