@@ -114,6 +114,15 @@ safe to pipe into agents and automation. `table` is a compact terminal summary;
 Detections include optional `technology_categories` metadata such as Payments,
 Analytics, CRM, or CDN. Categories describe the technology; they never create
 a detection and therefore do not change the conservative matching behavior.
+Structured reports also include `http.signals_truncated` (existing, mapped to
+`partial` with `SIGNALS_TRUNCATED` when `ok`) and deterministic
+`http.signals_truncated_reasons: []string`
+(`http.pages[].signals_truncated_reasons` for opt-in secondary pages).
+Allowed reasons are `links`, `signals`, `inline_scripts`, `window_names`,
+`headers`, `cookie_count`, `cookie_bytes`, `cookie_value` — sorted,
+deduplicated, and only when a valid candidate was actually omitted or
+truncated. When truncated, detection may be incomplete. The minimal
+`{domain:[technologies]}` assignment output is unchanged.
 
 `technograph explain` runs the same evidence-based scan but formats the result
 for people: detections are grouped with their matching channel and source,

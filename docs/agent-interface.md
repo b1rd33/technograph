@@ -50,7 +50,14 @@ JSON and do not make a successfully executed batch fail.
 The stable schema is `1.0`; see `schemas/scan-report.schema.json`. A
 fingerprint's confidence directive is included only in its matching evidence.
 Technograph deliberately does not invent a combined technology confidence
-score.
+score. Structured reports include `http.signals_truncated` (existing) and
+deterministic `http.signals_truncated_reasons: []string` (`http.pages[].signals_truncated_reasons`
+for opt-in secondary pages). Allowed reasons are `links`, `signals`,
+`inline_scripts`, `window_names`, `headers`, `cookie_count`, `cookie_bytes`,
+`cookie_value` — sorted, deduplicated, and only when a valid candidate was
+actually omitted or truncated. When truncated, detection may be incomplete and
+the result maps to `partial` with a `SIGNALS_TRUNCATED` warning. The minimal
+`{domain:[technologies]}` assignment artifact is unchanged.
 
 When available, `technology_categories` maps detected technology names to
 descriptive categories. This metadata cannot cause a detection. The same data
@@ -170,7 +177,10 @@ store. MCP history operations use homepage-only coverage and the same
 scanner/fingerprint compatibility baselines as CLI `watch`.
 
 The server uses only embedded fingerprints, enforces a global 20-domain work
-limit, and always enables its autonomous network policy. It accepts bare public
+limit, and always enables its autonomous network policy. MCP results reuse the
+same detailed `Report` model as the structured CLI, including
+`http.signals_truncated` and `http.signals_truncated_reasons` for homepage and
+secondary pages. It accepts bare public
 domains only, resolves targets before dialing, rejects private/loopback/link-
 local/reserved addresses, pins the validated IP for the connection, validates
 every redirect through the same dial policy, limits ports to 80/443, and ignores

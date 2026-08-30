@@ -90,23 +90,30 @@ func Cookies(cookies []*http.Cookie) []model.Signal {
 	return signals
 }
 
+// DocumentWithLinksDetailed is like DocumentWithLinks but also returns
+// deterministic truncation reasons when truncated.
+func DocumentWithLinksDetailed(body []byte, baseURL *url.URL) ([]model.Signal, []string, bool, []model.TruncationReason, error) {
+	return documentWithLinksInternal(body, baseURL)
+}
+
 // Document statically extracts raw HTML, script URLs, inline source, meta
 // fields, and syntactic window.* references. JavaScript is never executed.
 func Document(body []byte, baseURL *url.URL) ([]model.Signal, error) {
-	signals, _, _, err := DocumentWithLinks(body, baseURL)
+	signals, _, _, _, err := DocumentWithLinksDetailed(body, baseURL)
 	return signals, err
 }
 
 // DocumentWithLinks extracts the same static signals plus resolved anchor URLs
 // for the bounded opt-in crawler. It does not fetch or execute anything.
 func DocumentWithLinks(body []byte, baseURL *url.URL) ([]model.Signal, []string, bool, error) {
-	return documentWithLinksInternal(body, baseURL)
+	signals, links, truncated, _, err := DocumentWithLinksDetailed(body, baseURL)
+	return signals, links, truncated, err
 }
 
-func documentWithLinksInternal(body []byte, baseURL *url.URL) ([]model.Signal, []string, bool, error) {
+func documentWithLinksInternal(body []byte, baseURL *url.URL) ([]model.Signal, []string, bool, []model.TruncationReason, error) {
 	document, err := html.Parse(bytes.NewReader(body))
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, false, nil, err
 	}
 	signals := []model.Signal{{
 		Channel: model.ChannelHTML,
@@ -116,6 +123,11 @@ func documentWithLinksInternal(body []byte, baseURL *url.URL) ([]model.Signal, [
 	windowNames := make(map[string]struct{})
 	links := make([]string, 0)
 	truncated := false
+	reasons := make(map[model.TruncationReason]struct{})
+	addReason := func(r model.TruncationReason) {
+		truncated = true
+		reasons[r] = struct{}{}
+	}
 
 	var walk func(*html.Node)
 	inlineCount := 0
@@ -123,18 +135,24 @@ func documentWithLinksInternal(body []byte, baseURL *url.URL) ([]model.Signal, [
 		if node.Type == html.ElementNode {
 			switch strings.ToLower(node.Data) {
 			case "a":
+				rawHref := attribute(node, "href")
+				if strings.TrimSpace(rawHref) == "" {
+					break
+				}
+				resolved := resolveDocumentURL(baseURL, rawHref)
+				if resolved == "" {
+					break
+				}
 				if len(links) >= maxLinksPerPage {
-					truncated = true
+					addReason(model.ReasonLinks)
 				} else {
-					if resolved := resolveDocumentURL(baseURL, attribute(node, "href")); resolved != "" {
-						links = append(links, resolved)
-					}
+					links = append(links, resolved)
 				}
 			case "script":
 				source := attribute(node, "src")
 				if source != "" {
 					if len(signals) >= maxSignalsPerPage {
-						truncated = true
+						addReason(model.ReasonSignals)
 						break
 					}
 					signals = append(signals, model.Signal{
@@ -142,40 +160,44 @@ func documentWithLinksInternal(body []byte, baseURL *url.URL) ([]model.Signal, [
 						Value:   source,
 						Origin:  "html:script-src",
 					})
-					if len(signals) >= maxSignalsPerPage {
-						truncated = true
-					} else {
-						if resolved := resolveScriptURL(baseURL, source); resolved != "" && resolved != source {
-							signals = append(signals, model.Signal{
-								Channel: model.ChannelScript,
-								Value:   resolved,
-								Origin:  "html:script-src-absolute",
-							})
-						}
+					candidate := resolveScriptURL(baseURL, source)
+					if candidate == "" || candidate == source {
+						break
 					}
+					if len(signals) >= maxSignalsPerPage {
+						addReason(model.ReasonSignals)
+						break
+					}
+					signals = append(signals, model.Signal{
+						Channel: model.ChannelScript,
+						Value:   candidate,
+						Origin:  "html:script-src-absolute",
+					})
 				} else {
+					script := boundedText(node, maxInlineScriptBytes)
+					if script == "" {
+						break
+					}
+					if inlineCount >= maxInlineScripts {
+						addReason(model.ReasonInlineScripts)
+					}
+					if len(signals) >= maxSignalsPerPage {
+						addReason(model.ReasonSignals)
+					}
 					if inlineCount >= maxInlineScripts || len(signals) >= maxSignalsPerPage {
-						truncated = true
 						break
 					}
 					inlineCount++
-					script := boundedText(node, maxInlineScriptBytes)
-					if script != "" {
-						signals = append(signals, model.Signal{
-							Channel: model.ChannelScript,
-							Value:   script,
-							Origin:  "html:inline-script",
-						})
-						if collectWindowNames(script, windowNames) {
-							truncated = true
-						}
+					signals = append(signals, model.Signal{
+						Channel: model.ChannelScript,
+						Value:   script,
+						Origin:  "html:inline-script",
+					})
+					if collectWindowNames(script, windowNames) {
+						addReason(model.ReasonWindowNames)
 					}
 				}
 			case "meta":
-				if len(signals) >= maxSignalsPerPage {
-					truncated = true
-					break
-				}
 				name := firstNonEmpty(
 					attribute(node, "name"),
 					attribute(node, "property"),
@@ -183,14 +205,19 @@ func documentWithLinksInternal(body []byte, baseURL *url.URL) ([]model.Signal, [
 					attribute(node, "itemprop"),
 				)
 				content := attribute(node, "content")
-				if name != "" || content != "" {
-					signals = append(signals, model.Signal{
-						Channel: model.ChannelMeta,
-						Name:    strings.ToLower(name),
-						Value:   content,
-						Origin:  "html:meta",
-					})
+				if name == "" && content == "" {
+					break
 				}
+				if len(signals) >= maxSignalsPerPage {
+					addReason(model.ReasonSignals)
+					break
+				}
+				signals = append(signals, model.Signal{
+					Channel: model.ChannelMeta,
+					Name:    strings.ToLower(name),
+					Value:   content,
+					Origin:  "html:meta",
+				})
 			}
 		}
 		for child := node.FirstChild; child != nil; child = child.NextSibling {
@@ -206,7 +233,7 @@ func documentWithLinksInternal(body []byte, baseURL *url.URL) ([]model.Signal, [
 	sort.Strings(names)
 	for _, name := range names {
 		if len(signals) >= maxSignalsPerPage {
-			truncated = true
+			addReason(model.ReasonSignals)
 			break
 		}
 		signals = append(signals, model.Signal{
@@ -216,7 +243,15 @@ func documentWithLinksInternal(body []byte, baseURL *url.URL) ([]model.Signal, [
 			Origin:  "html:window-global-syntax",
 		})
 	}
-	return signals, links, truncated, nil
+	if !truncated {
+		return signals, links, false, nil, nil
+	}
+	sorted := make([]model.TruncationReason, 0, len(reasons))
+	for r := range reasons {
+		sorted = append(sorted, r)
+	}
+	sort.Slice(sorted, func(i, j int) bool { return string(sorted[i]) < string(sorted[j]) })
+	return signals, links, true, sorted, nil
 }
 
 func attribute(node *html.Node, key string) string {

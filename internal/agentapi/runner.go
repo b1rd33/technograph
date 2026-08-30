@@ -155,7 +155,15 @@ func (runner Runner) convertResult(index int, input string, scanned model.ScanRe
 	}
 	result.TechnologyCategories = runner.Service.CategoriesFor(result.Technologies)
 	if scanned.HTTP.SignalsTruncated {
-		result.Warnings = append(result.Warnings, Issue{Code: "SIGNALS_TRUNCATED", Message: "extraction truncated due to resource limits; detection may be incomplete", Channel: "http"})
+		message := "extraction truncated due to resource limits; detection may be incomplete"
+		if len(scanned.HTTP.SignalsTruncatedReasons) > 0 {
+			parts := make([]string, 0, len(scanned.HTTP.SignalsTruncatedReasons))
+			for _, r := range scanned.HTTP.SignalsTruncatedReasons {
+				parts = append(parts, string(r))
+			}
+			message += ": " + strings.Join(parts, ", ")
+		}
+		result.Warnings = append(result.Warnings, Issue{Code: "SIGNALS_TRUNCATED", Message: message, Channel: "http"})
 		if result.Status == StatusOK {
 			result.Status = StatusPartial
 		}

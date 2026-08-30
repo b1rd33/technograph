@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — v1.2.0
+
+- Additive truncation reasons: structured reports include `http.signals_truncated`
+  (existing) and deterministic `http.signals_truncated_reasons: []string`
+  (`http.pages[].signals_truncated_reasons` for opt-in secondary pages). Allowed
+  values are `links`, `signals`, `inline_scripts`, `window_names`, `headers`,
+  `cookie_count`, `cookie_bytes`, `cookie_value` — sorted and deduplicated, only
+  when a valid candidate was actually omitted or truncated. `SIGNALS_TRUNCATED`
+  now includes the reasons (`detection may be incomplete: <reasons>`) and still
+  maps to `partial` when `ok`. When truncated, detection may be incomplete.
+  No change to the minimal `{domain:[technologies]}` assignment artifact.
+- Limits intentionally unchanged; tuning requires evidence from live scans and
+  profiling before any increase.
+
 ## v1.1.0 — 2026-08-30
 
 - HTML extraction budgets: cap derived links (5,000), signals (5,000),

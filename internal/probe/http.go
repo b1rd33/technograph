@@ -193,16 +193,18 @@ func (probe *HTTPProbe) attempt(ctx context.Context, target, allowedHost string)
 	result.BodyBytes = len(body)
 
 	signals := extract.Headers(response.Header)
-	origHeaderCount := len(signals)
-	signals = limitHeaders(signals)
-	if len(signals) < origHeaderCount {
-		result.SignalsTruncated = true
-	}
+	signals, headerTruncated := limitHeaders(signals)
 	cookieSignals := extract.Cookies(jar.Cookies(response.Request.URL))
-	origCookieCount := len(cookieSignals)
-	cookieSignals = limitCookies(cookieSignals)
-	if len(cookieSignals) < origCookieCount || jar.Truncated() {
-		result.SignalsTruncated = true
+	cookieSignals, cookieReasons := limitCookies(cookieSignals)
+	reasons := make(map[model.TruncationReason]struct{})
+	if headerTruncated {
+		reasons[model.ReasonHeaders] = struct{}{}
+	}
+	for _, r := range cookieReasons {
+		reasons[r] = struct{}{}
+	}
+	for _, r := range jar.TruncatedReasons() {
+		reasons[r] = struct{}{}
 	}
 	signals = append(signals, cookieSignals...)
 	result.Blocked, result.Challenge, result.BlockReason = classifyResponse(response.StatusCode, response.Header, body)
@@ -210,18 +212,34 @@ func (probe *HTTPProbe) attempt(ctx context.Context, target, allowedHost string)
 		probe.logger.Warn("HTTP response blocked", "url", result.FinalURL, "reason", result.BlockReason)
 	}
 	extractTruncated := false
+	var extractReasons []model.TruncationReason
 	links := []string{}
 	if response.StatusCode < http.StatusBadRequest && !result.Challenge && isHTMLResponse(response.Header.Get("Content-Type"), body) {
-		documentSignals, documentLinks, docTruncated, parseErr := extract.DocumentWithLinks(body, response.Request.URL)
+		documentSignals, documentLinks, docTruncated, docReasons, parseErr := extract.DocumentWithLinksDetailed(body, response.Request.URL)
 		if parseErr != nil {
 			return result, signals, nil, fmt.Errorf("parse %s: %w", result.FinalURL, parseErr)
 		}
 		extractTruncated = docTruncated
+		extractReasons = docReasons
 		signals = append(signals, documentSignals...)
 		links = documentLinks
 	}
 	if extractTruncated {
+		for _, r := range extractReasons {
+			reasons[r] = struct{}{}
+		}
+		if len(extractReasons) == 0 {
+			reasons[model.ReasonSignals] = struct{}{}
+		}
+	}
+	if len(reasons) > 0 {
 		result.SignalsTruncated = true
+		sorted := make([]model.TruncationReason, 0, len(reasons))
+		for r := range reasons {
+			sorted = append(sorted, r)
+		}
+		sort.Slice(sorted, func(i, j int) bool { return string(sorted[i]) < string(sorted[j]) })
+		result.SignalsTruncatedReasons = sorted
 	}
 	return result, signals, links, nil
 }
@@ -289,6 +307,21 @@ func (probe *HTTPProbe) crawl(ctx context.Context, result model.HTTPResult, sign
 		result.PageCount++
 		if page.SignalsTruncated {
 			result.SignalsTruncated = true
+			if len(page.SignalsTruncatedReasons) > 0 {
+				merged := make(map[model.TruncationReason]struct{}, len(result.SignalsTruncatedReasons)+len(page.SignalsTruncatedReasons))
+				for _, r := range result.SignalsTruncatedReasons {
+					merged[r] = struct{}{}
+				}
+				for _, r := range page.SignalsTruncatedReasons {
+					merged[r] = struct{}{}
+				}
+				sorted := make([]model.TruncationReason, 0, len(merged))
+				for r := range merged {
+					sorted = append(sorted, r)
+				}
+				sort.Slice(sorted, func(i, j int) bool { return string(sorted[i]) < string(sorted[j]) })
+				result.SignalsTruncatedReasons = sorted
+			}
 		}
 		if err != nil {
 			continue
@@ -314,7 +347,7 @@ func secondaryPage(result model.HTTPResult) model.HTTPPageResult {
 		RequestedURL: result.RequestedURL, FinalURL: result.FinalURL,
 		StatusCode: result.StatusCode, Redirects: result.Redirects,
 		ContentType: result.ContentType, BodyBytes: result.BodyBytes,
-		BodyTruncated: result.BodyTruncated, SignalsTruncated: result.SignalsTruncated, Blocked: result.Blocked,
+		BodyTruncated: result.BodyTruncated, SignalsTruncated: result.SignalsTruncated, SignalsTruncatedReasons: append([]model.TruncationReason(nil), result.SignalsTruncatedReasons...), Blocked: result.Blocked,
 		Challenge: result.Challenge, BlockReason: result.BlockReason, Error: result.Error,
 	}
 }
@@ -441,7 +474,7 @@ func isTransportFailure(err error) bool {
 	return errors.As(err, &certificateError)
 }
 
-func limitCookies(signals []model.Signal) []model.Signal {
+func limitCookies(signals []model.Signal) ([]model.Signal, []model.TruncationReason) {
 	if len(signals) <= maxCookies {
 		total := 0
 		for _, s := range signals {
@@ -456,33 +489,52 @@ func limitCookies(signals []model.Signal) []model.Signal {
 				}
 			}
 			if !need {
-				return signals
+				return signals, nil
 			}
 		}
 	}
+	reasons := make(map[model.TruncationReason]struct{})
 	limited := make([]model.Signal, 0, min(len(signals), maxCookies))
 	total := 0
 	for _, s := range signals {
 		if len(limited) >= maxCookies {
+			reasons[model.ReasonCookieCount] = struct{}{}
 			break
 		}
 		if len(s.Value) > maxCookieValueLen {
+			reasons[model.ReasonCookieValue] = struct{}{}
 			s.Value = s.Value[:maxCookieValueLen]
 		}
 		if total+len(s.Value) > maxCookieBytes {
+			reasons[model.ReasonCookieBytes] = struct{}{}
 			break
 		}
 		total += len(s.Value)
 		limited = append(limited, s)
 	}
-	return limited
+	if len(limited) < len(signals) && len(reasons) == 0 {
+		if len(signals) > maxCookies {
+			reasons[model.ReasonCookieCount] = struct{}{}
+		} else {
+			reasons[model.ReasonCookieBytes] = struct{}{}
+		}
+	}
+	if len(reasons) == 0 {
+		return limited, nil
+	}
+	sorted := make([]model.TruncationReason, 0, len(reasons))
+	for r := range reasons {
+		sorted = append(sorted, r)
+	}
+	sort.Slice(sorted, func(i, j int) bool { return string(sorted[i]) < string(sorted[j]) })
+	return limited, sorted
 }
 
-func limitHeaders(signals []model.Signal) []model.Signal {
+func limitHeaders(signals []model.Signal) ([]model.Signal, bool) {
 	if len(signals) <= 128 {
-		return signals
+		return signals, false
 	}
-	return signals[:128]
+	return signals[:128], true
 }
 
 func newJar() http.CookieJar {
@@ -497,10 +549,23 @@ type boundedJar struct {
 	admittedCount  int
 	admittedBytes  int
 	truncated      bool
+	reasons        map[model.TruncationReason]struct{}
 }
 
 func (jar *boundedJar) Truncated() bool {
 	return jar.truncated
+}
+
+func (jar *boundedJar) TruncatedReasons() []model.TruncationReason {
+	if jar.reasons == nil || len(jar.reasons) == 0 {
+		return nil
+	}
+	sorted := make([]model.TruncationReason, 0, len(jar.reasons))
+	for r := range jar.reasons {
+		sorted = append(sorted, r)
+	}
+	sort.Slice(sorted, func(i, j int) bool { return string(sorted[i]) < string(sorted[j]) })
+	return sorted
 }
 
 func (jar *boundedJar) Cookies(u *url.URL) []*http.Cookie {
@@ -514,9 +579,20 @@ func (jar *boundedJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 	if jar.jar == nil {
 		return
 	}
+	ensureReason := func(r model.TruncationReason) {
+		if jar.reasons == nil {
+			jar.reasons = make(map[model.TruncationReason]struct{})
+		}
+		jar.reasons[r] = struct{}{}
+	}
 	if jar.admittedCount >= jar.maxCookies || jar.admittedBytes >= jar.maxCookieBytes {
 		if len(cookies) > 0 {
 			jar.truncated = true
+			if jar.admittedCount >= jar.maxCookies {
+				ensureReason(model.ReasonCookieCount)
+			} else {
+				ensureReason(model.ReasonCookieBytes)
+			}
 		}
 		return
 	}
@@ -524,6 +600,7 @@ func (jar *boundedJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 	for _, c := range cookies {
 		if jar.admittedCount >= jar.maxCookies {
 			jar.truncated = true
+			ensureReason(model.ReasonCookieCount)
 			break
 		}
 		sizeValue := c.Value
@@ -533,6 +610,7 @@ func (jar *boundedJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 		cookieSize := len(c.Name) + len(c.Domain) + len(c.Path) + len(sizeValue)
 		if jar.admittedBytes+cookieSize > jar.maxCookieBytes {
 			jar.truncated = true
+			ensureReason(model.ReasonCookieBytes)
 			break
 		}
 		didTruncateValue := len(c.Value) > maxCookieValueLen
@@ -541,6 +619,7 @@ func (jar *boundedJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 			clone.Value = clone.Value[:maxCookieValueLen]
 			c = &clone
 			jar.truncated = true
+			ensureReason(model.ReasonCookieValue)
 		}
 		allowed = append(allowed, c)
 		jar.admittedCount++

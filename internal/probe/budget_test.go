@@ -17,7 +17,7 @@ func TestLimitHeadersTruncatesAt128(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		signals = append(signals, model.Signal{Channel: model.ChannelHeader, Name: "x-header", Value: "v"})
 	}
-	limited := limitHeaders(signals)
+	limited, _ := limitHeaders(signals)
 	if len(limited) != 128 {
 		t.Fatalf("headers = %d, want 128", len(limited))
 	}
@@ -25,7 +25,8 @@ func TestLimitHeadersTruncatesAt128(t *testing.T) {
 	for i := range small {
 		small[i] = model.Signal{Channel: model.ChannelHeader, Name: "x", Value: "v"}
 	}
-	if len(limitHeaders(small)) != 10 {
+	smallLimited, _ := limitHeaders(small)
+	if len(smallLimited) != 10 {
 		t.Fatalf("small headers should not be truncated")
 	}
 }
@@ -36,7 +37,7 @@ func TestLimitCookiesBoundsCountAndBytes(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		signals = append(signals, model.Signal{Channel: model.ChannelCookie, Name: "c", Value: strings.Repeat("v", 100)})
 	}
-	limited := limitCookies(signals)
+	limited, _ := limitCookies(signals)
 	if len(limited) != 100 {
 		t.Fatalf("cookies = %d, want 100", len(limited))
 	}
@@ -45,7 +46,7 @@ func TestLimitCookiesBoundsCountAndBytes(t *testing.T) {
 func TestLimitCookiesTruncatesValueAt4096(t *testing.T) {
 	t.Parallel()
 	signals := []model.Signal{{Channel: model.ChannelCookie, Name: "c", Value: strings.Repeat("v", 8192)}}
-	limited := limitCookies(signals)
+	limited, _ := limitCookies(signals)
 	if len(limited[0].Value) != maxCookieValueLen {
 		t.Fatalf("cookie value len = %d, want %d", len(limited[0].Value), maxCookieValueLen)
 	}
@@ -74,7 +75,7 @@ func TestLimitCookiesBoundsTotalBytesAt32K(t *testing.T) {
 	for i := 0; i < 20; i++ {
 		signals = append(signals, model.Signal{Channel: model.ChannelCookie, Name: "c", Value: strings.Repeat("v", 4096)})
 	}
-	limited := limitCookies(signals)
+	limited, _ := limitCookies(signals)
 	total := 0
 	for _, s := range limited {
 		total += len(s.Value)
@@ -93,7 +94,7 @@ func TestLimitCookiesSmallBatchUnaffected(t *testing.T) {
 		{Channel: model.ChannelCookie, Name: "intercom-session", Value: "x"},
 		{Channel: model.ChannelCookie, Name: "__cf_bm", Value: "y"},
 	}
-	limited := limitCookies(signals)
+	limited, _ := limitCookies(signals)
 	if len(limited) != 2 {
 		t.Fatalf("normal cookies truncated: %d", len(limited))
 	}
@@ -117,7 +118,7 @@ func TestProbeCookieBudgetsViaHTTPCookies(t *testing.T) {
 	for i := 0; i < 150; i++ {
 		signals = append(signals, model.Signal{Channel: model.ChannelCookie, Name: "c", Value: strings.Repeat("v", 10)})
 	}
-	limited := limitCookies(signals)
+	limited, _ := limitCookies(signals)
 	if len(limited) != maxCookies {
 		t.Fatalf("probe cookie budget = %d, want %d", len(limited), maxCookies)
 	}
@@ -129,7 +130,8 @@ func TestProbeHeaderBudgetUnaffectedForNormalHeaders(t *testing.T) {
 		{Channel: model.ChannelHeader, Name: "cf-ray", Value: "abc"},
 		{Channel: model.ChannelHeader, Name: "x-stripe-some", Value: "v"},
 	}
-	if len(limitHeaders(signals)) != 2 {
+	limited, _ := limitHeaders(signals)
+	if len(limited) != 2 {
 		t.Fatal("normal headers truncated unexpectedly")
 	}
 }
