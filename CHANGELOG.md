@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — v1.2.0
+## v1.2.0 — 2026-08-30
 
 - Additive truncation reasons: structured reports include `http.signals_truncated`
   (existing) and deterministic `http.signals_truncated_reasons: []string`
