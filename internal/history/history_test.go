@@ -1,9 +1,12 @@
 package history
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -78,6 +81,116 @@ func TestStoreRejectsCorruptEntry(t *testing.T) {
 	}
 	if _, err := (Store{Root: root}).Latest("example.com"); err == nil {
 		t.Fatal("corrupt entry was ignored")
+	}
+}
+
+func TestStoreRejectsOversizedRequestIDAtSave(t *testing.T) {
+	t.Parallel()
+	store := Store{Root: t.TempDir()}
+	oversized := make([]byte, maxRequestIDLen+1)
+	for i := range oversized {
+		oversized[i] = 'r'
+	}
+	report := fixtureReport(time.Now(), string(oversized), nil)
+	report.Results[0].Domain = "example.com"
+	report.Results[0].Status = agentapi.StatusOK
+	if _, err := store.Save(report, "v1", testDigest); err == nil {
+		t.Fatal("expected Save to reject request_id exceeding 256 bytes")
+	}
+	if _, err := store.Latest("example.com"); !errors.Is(err, ErrNoHistory) {
+		t.Fatalf("Latest error = %v, want ErrNoHistory (entry should not have been written)", err)
+	}
+}
+
+func TestStoreEnforcesEntrySizeBeforeCommit(t *testing.T) {
+	t.Parallel()
+	store := Store{Root: t.TempDir()}
+	huge := make([]byte, maximumEntrySize+1)
+	for i := range huge {
+		huge[i] = 'x'
+	}
+	largeTech := string(huge)
+	report := fixtureReport(time.Now(), "big", []string{largeTech})
+	report.Results[0].Domain = "example.com"
+	report.Results[0].Status = agentapi.StatusOK
+	if _, err := store.Save(report, "v1", testDigest); err == nil {
+		t.Fatal("expected Save to reject entry exceeding 16 MiB")
+	}
+	if _, err := store.Latest("example.com"); !errors.Is(err, ErrNoHistory) {
+		t.Fatalf("Latest error = %v, want ErrNoHistory (oversized entry should not have been committed)", err)
+	}
+}
+
+func TestStorePrunesOldestAtMaximumEntries(t *testing.T) {
+	root := t.TempDir()
+	directory := filepath.Join(root, domainKey("example.com"))
+	const limit = 5
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < limit; i++ {
+		path := filepath.Join(directory, fmt.Sprintf("20260102T100000.00000000%dZ-aaaa-%04d.json", i, i))
+		entry := Entry{
+			SchemaVersion: SchemaVersion,
+			ID:            fmt.Sprintf("20260102T100000.00000000%dZ-aaaa-%04d", i, i),
+			RecordedAt:    time.Date(2026, 1, 2, 10, 0, 0, 0, time.UTC).Add(time.Duration(i) * time.Nanosecond),
+			RequestID:     "seed",
+			Result:        agentapi.DomainResult{Domain: "example.com", Status: agentapi.StatusOK},
+		}
+		data, err := json.MarshalIndent(entry, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		data = append(data, '\n')
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := pruneHistoryDirectoryWithLimit(directory, limit); err != nil {
+		t.Fatalf("prune at limit: %v", err)
+	}
+	items, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonCount := 0
+	for _, item := range items {
+		if item.Type().IsRegular() && strings.HasSuffix(item.Name(), ".json") {
+			jsonCount++
+		}
+	}
+	if jsonCount != limit-1 {
+		t.Fatalf("after prune at limit retained %d, want %d (room for next write)", jsonCount, limit-1)
+	}
+	store := Store{Root: root}
+	base := time.Date(2026, 8, 28, 10, 0, 0, 0, time.UTC)
+	report := fixtureReport(base, "pruned-check", []string{"Stripe"})
+	report.Results[0].Domain = "example.com"
+	report.Results[0].Status = agentapi.StatusOK
+	if _, err := store.Save(report, "v1", testDigest); err != nil {
+		t.Fatalf("Save after prune setup failed: %v", err)
+	}
+	items, err = os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonCount = 0
+	for _, item := range items {
+		if item.Type().IsRegular() && strings.HasSuffix(item.Name(), ".json") {
+			jsonCount++
+		}
+	}
+	if jsonCount != limit {
+		t.Fatalf("after Save retained %d, want %d", jsonCount, limit)
+	}
+	if _, err := os.Stat(filepath.Join(directory, "20260102T100000.000000000Z-aaaa-0000.json")); !os.IsNotExist(err) {
+		t.Fatalf("expected oldest entry pruned, err=%v", err)
+	}
+	if _, err := store.History("example.com", limit); err != nil {
+		t.Fatalf("History after prune should remain readable: %v", err)
+	}
+	if _, err := store.Latest("example.com"); err != nil {
+		t.Fatalf("Latest after prune failed: %v", err)
 	}
 }
 

@@ -85,13 +85,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, bundledFi
 		level = slog.LevelDebug
 	}
 	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: level}))
-	service, warnings, err := app.New(app.Options{
-		FingerprintData: fingerprintData, StrictFingerprints: strict,
-		Concurrency: *concurrency, HTTPTimeout: *httpTimeout, DNSTimeout: *dnsTimeout,
-		DNSServers:    dnsServers,
-		DomainTimeout: max(*httpTimeout, *dnsTimeout) + time.Second,
-		InsecureTLS:   *insecure, Logger: logger,
-	})
+	service, warnings, err := app.New(legacyAppOptions(fingerprintData, strict, *concurrency, *httpTimeout, *dnsTimeout, dnsServers, *insecure, logger))
 	if err != nil {
 		fmt.Fprintf(stderr, "technograph: %v\n", err)
 		return 1
@@ -134,4 +128,14 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, bundledFi
 	}
 	fmt.Fprintf(stdout, "Scanned %d domains in %s: %d detections, %d HTTP failures, %d blocked responses\n", len(results), time.Since(started).Round(time.Millisecond), detections, failures, blocked)
 	return 0
+}
+
+func legacyAppOptions(fingerprintData []byte, strict bool, concurrency int, httpTimeout, dnsTimeout time.Duration, dnsServers []string, insecure bool, logger *slog.Logger) app.Options {
+	return app.Options{
+		FingerprintData: fingerprintData, StrictFingerprints: strict,
+		Concurrency: concurrency, HTTPTimeout: httpTimeout, DNSTimeout: dnsTimeout,
+		DNSServers:    dnsServers,
+		DomainTimeout: max(httpTimeout, dnsTimeout) + time.Second,
+		InsecureTLS:   insecure, SafeNetwork: true, Logger: logger,
+	}
 }

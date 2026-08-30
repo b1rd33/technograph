@@ -51,3 +51,13 @@ func TestRunHelpUsesStdoutAndSucceeds(t *testing.T) {
 		})
 	}
 }
+
+func TestLegacyCLIRoutesThroughSafeNetwork(t *testing.T) {
+	options := legacyAppOptions(nil, true, 10, 8e9, 3e9, nil, false, nil)
+	if !options.SafeNetwork {
+		t.Fatal("legacy CLI must enable SafeNetwork")
+	}
+	if options.DomainTimeout <= 0 {
+		t.Fatal("legacy options must set DomainTimeout")
+	}
+}

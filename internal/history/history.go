@@ -3,6 +3,7 @@
 package history
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -22,6 +23,7 @@ const (
 	SchemaVersion    = "1.0"
 	maximumEntrySize = 16 << 20
 	MaximumEntries   = 10000
+	maxRequestIDLen  = 256
 )
 
 var ErrNoHistory = errors.New("no history found")
@@ -120,7 +122,7 @@ func Observe(store Store, report agentapi.Report, scannerVersion, fingerprintDig
 }
 
 func (store Store) Save(report agentapi.Report, scannerVersion, fingerprintDigest string) ([]Entry, error) {
-	if report.RequestID == "" || strings.TrimSpace(scannerVersion) == "" || !validDigest(fingerprintDigest) {
+	if report.RequestID == "" || len(report.RequestID) > maxRequestIDLen || strings.TrimSpace(scannerVersion) == "" || !validDigest(fingerprintDigest) {
 		return nil, errors.New("history metadata is incomplete")
 	}
 	root, err := store.prepareRoot()
@@ -142,8 +144,14 @@ func (store Store) Save(report agentapi.Report, scannerVersion, fingerprintDiges
 			RequestID: report.RequestID, ScannerVersion: scannerVersion,
 			FingerprintDigest: fingerprintDigest, Result: result,
 		}
+		if err := validateEntrySize(entry); err != nil {
+			return nil, err
+		}
 		directory := filepath.Join(root, domainKey(result.Domain))
 		if err := ensureDirectory(directory); err != nil {
+			return nil, err
+		}
+		if err := pruneHistoryDirectory(directory); err != nil {
 			return nil, err
 		}
 		if err := writePrivateAtomic(filepath.Join(directory, id+".json"), entry); err != nil {
@@ -333,4 +341,48 @@ func (store Store) now() time.Time {
 		return store.Now().UTC()
 	}
 	return time.Now().UTC()
+}
+
+func validateEntrySize(entry Entry) error {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(entry); err != nil {
+		return fmt.Errorf("encode history entry: %w", err)
+	}
+	if buf.Len() > maximumEntrySize {
+		return fmt.Errorf("history entry %s exceeds %d bytes", entry.ID, maximumEntrySize)
+	}
+	return nil
+}
+
+func pruneHistoryDirectory(directory string) error {
+	return pruneHistoryDirectoryWithLimit(directory, MaximumEntries)
+}
+
+func pruneHistoryDirectoryWithLimit(directory string, limit int) error {
+	items, err := os.ReadDir(directory)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("read history for pruning: %w", err)
+	}
+	files := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.Type().IsRegular() && strings.HasSuffix(item.Name(), ".json") {
+			files = append(files, item.Name())
+		}
+	}
+	if len(files) < limit {
+		return nil
+	}
+	sort.Strings(files)
+	excess := len(files) - limit + 1
+	for _, name := range files[:excess] {
+		if err := os.Remove(filepath.Join(directory, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("prune history entry %s: %w", name, err)
+		}
+	}
+	return nil
 }

@@ -67,6 +67,31 @@ func TestRunnerCapsAutonomousBatchSize(t *testing.T) {
 	}
 }
 
+func TestRunnerRejectsOversizedRequestID(t *testing.T) {
+	runner := testRunner(t)
+	oversized := make([]byte, maxRequestIDLen+1)
+	for i := range oversized {
+		oversized[i] = 'r'
+	}
+	if _, err := runner.Scan(context.Background(), string(oversized), []string{"example.com"}); err == nil {
+		t.Fatal("expected Scan to reject request_id exceeding 256 bytes")
+	}
+	if _, _, err := runner.ScanStream(context.Background(), string(oversized), []string{"example.com"}); err == nil {
+		t.Fatal("expected ScanStream to reject request_id exceeding 256 bytes")
+	}
+	exact := make([]byte, maxRequestIDLen)
+	for i := range exact {
+		exact[i] = 'r'
+	}
+	report, err := runner.Scan(context.Background(), string(exact), []string{"example.com"})
+	if err != nil {
+		t.Fatalf("expected 256-byte request_id to be accepted: %v", err)
+	}
+	if len(report.RequestID) != maxRequestIDLen {
+		t.Fatalf("expected preserved 256-byte request_id, got %d", len(report.RequestID))
+	}
+}
+
 func TestRunnerReportsSecondaryPageFailureAsPartial(t *testing.T) {
 	service, _, err := app.New(app.Options{
 		FingerprintData: []byte(`{"schema_version":1,"technologies":{"Cloudflare":{"header":"cf-ray"}}}`),

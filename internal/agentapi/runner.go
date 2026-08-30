@@ -17,6 +17,8 @@ import (
 
 const DefaultMaxDomains = 20
 
+const maxRequestIDLen = 256
+
 type Runner struct {
 	Service    *app.Service
 	MaxDomains int
@@ -68,7 +70,10 @@ func (runner Runner) Scan(ctx context.Context, requestID string, inputs []string
 	if err != nil {
 		return Report{}, err
 	}
-	requestID = normalizeRequestID(requestID)
+	requestID, err = normalizeRequestID(requestID)
+	if err != nil {
+		return Report{}, err
+	}
 	results := make([]DomainResult, len(prepared))
 	validDomains := make([]model.Domain, 0, len(prepared))
 	validIndexes := make([]int, 0, len(prepared))
@@ -100,7 +105,10 @@ func (runner Runner) ScanStream(ctx context.Context, requestID string, inputs []
 	if err != nil {
 		return "", nil, err
 	}
-	requestID = normalizeRequestID(requestID)
+	requestID, err = normalizeRequestID(requestID)
+	if err != nil {
+		return "", nil, err
+	}
 	results := make(chan DomainResult, len(prepared))
 	go func() {
 		defer close(results)
@@ -230,15 +238,18 @@ func (runner Runner) now() time.Time {
 	return time.Now().UTC()
 }
 
-func normalizeRequestID(value string) string {
+func normalizeRequestID(value string) (string, error) {
 	if trimmed := strings.TrimSpace(value); trimmed != "" {
-		return trimmed
+		if len(trimmed) > maxRequestIDLen {
+			return "", fmt.Errorf("request_id exceeds %d bytes", maxRequestIDLen)
+		}
+		return trimmed, nil
 	}
 	random := make([]byte, 12)
 	if _, err := rand.Read(random); err == nil {
-		return hex.EncodeToString(random)
+		return hex.EncodeToString(random), nil
 	}
-	return fmt.Sprintf("scan-%d", time.Now().UnixNano())
+	return fmt.Sprintf("scan-%d", time.Now().UnixNano()), nil
 }
 
 func nonNil(values []string) []string {

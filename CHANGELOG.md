@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.0.1 — 2026-08-30
+
+- Harden legacy networking: `technograph domains.txt` now uses `SafeNetwork: true`
+  (`internal/cli/run.go:88-105`), matching the structured CLI and MCP defaults.
+- Enforce request-ID limits: `Runner.Scan`/`ScanStream`
+  (`internal/agentapi/runner.go:20,70-112,241-252`) reject IDs above 256 bytes;
+  `history.Store.Save` (`internal/history/history.go:26,123-162,345-388`)
+  independently enforces the same limit and validates entry size against the
+  exact indented JSON bytes before commit. Oversized entries are rejected
+  before they can poison the store.
+- Bound history retention: `history.Store.Save` prunes the oldest file before
+  a write would exceed `MaximumEntries=10,000` (`history.go:359-388`), keeping
+  `Latest`/`History` readable. No change to CLI/MCP contracts or `output.json`.
+
 ## v1.0.0 — 2026-08-28
 
 - Declare stable 1.x CLI, JSON/JSONL, schema, normalized-fingerprint, history,
