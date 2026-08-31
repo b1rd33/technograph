@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — v1.3.1
+## v1.3.1 — 2026-08-31
 
 - MCP output schemas now advertise the exact eight allowed
   `signals_truncated_reasons` enum values (`links`, `signals`,
