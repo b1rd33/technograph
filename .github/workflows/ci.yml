@@ -21,6 +21,10 @@ jobs:
         run: test -z "$(gofmt -l .)"
       - name: Vet
         run: go vet ./...
+      - name: Fingerprint docs
+        run: |
+          make fingerprints-doc
+          git diff --exit-code -- docs/fingerprints.md
       - name: Test
         run: go test ./...
       - name: Offline benchmarks

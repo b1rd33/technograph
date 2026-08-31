@@ -99,11 +99,28 @@ printf 'stripe.com\nshopify.com\n' | technograph scan --format jsonl
 technograph scan --input domains.txt --output snapshot.json
 technograph validate example.com https://invalid.example
 technograph fingerprints
+technograph fingerprints --technology hubspot --format table
+technograph fingerprints --channel script --channel header
+technograph fingerprints --fingerprints custom.json --validate
 technograph fingerprints import --input webappanalyzer/src/technologies --output generated.json --report compatibility.json
 technograph compare before.json after.json --output diff.json
 technograph watch stripe.com --store .technograph-history
 technograph history stripe.com --store .technograph-history
 ```
+
+Fingerprint inspection is offline and makes no network requests. `technograph fingerprints`
+lists the embedded catalog; `--technology` is repeatable case-insensitive and
+`--channel` accepts only the nine normalized channels (union). Filtered JSON
+uses the same `FingerprintInventory` shape with the filtered count. Use
+`--format table` for a terminal view (tabs/newlines sanitized, JSON unchanged).
+External databases can be inspected with `--fingerprints custom.json`
+(permissive loading, warnings to stderr) and strictly validated with
+`--fingerprints custom.json --validate` (`fingerprint.Load(strict=true)` — no
+stdout on success, `1` on invalid, `2` on usage). Validation proves the file
+can be compiled, not that a technology will match a live site. See
+`docs/fingerprints.md` (generated) for the bundled table and
+`schemas/fingerprint-database.schema.json` for the exchange format. The
+original `output.json` assignment artifact is unchanged.
 
 JSON output uses schema version `1.0` and gives every input an `ok`, `partial`,
 `blocked`, `failed`, or `invalid` status plus typed warnings/errors. JSONL emits

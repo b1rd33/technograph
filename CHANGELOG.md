@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased — v1.3.0
+
+- Fingerprint transparency: extend `technograph fingerprints` with offline
+  inspection filters `--technology` (repeatable, case-insensitive) and
+  `--channel header|script|cookie|html|meta|js|dns_txt|dns_cname|dns_mx`
+  (repeatable union) plus `--format json|table` (json default, byte-compatible
+  `FingerprintInventory` with filtered count; table sanitizes tabs/newlines).
+  Filtering is post-load `Load → Descriptors() → filters` — one canonical
+  `fingerprint.Load` path.
+- Strict validation: `technograph fingerprints --fingerprints <file> --validate`
+  validates via `fingerprint.Load(strict=true)` (exit 0 valid no stdout,
+  exit 1 invalid, exit 2 usage). Rejects `--technology/--channel/--format table/--output`
+  when validating. Validates schema, limits, channels, regex, and strict-rejected
+  patterns.
+- Generated docs: add `docs/fingerprints.md` from bundled `fingerprints.json`
+  via `fingerprint.Load(strict=true) → Descriptors()` with Markdown escaping,
+  `16` technologies / `24` patterns table, channel/origin glossary, and
+  `make fingerprints-doc` plus CI drift guard.
+- No change to scanning, `fingerprints.json`, `output.json`, MCP, limits, or
+  detection behavior.
+
 ## v1.2.0 — 2026-08-30
 
 - Additive truncation reasons: structured reports include `http.signals_truncated`

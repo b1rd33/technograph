@@ -349,20 +349,54 @@ func runFingerprints(args []string, stdout, stderr io.Writer, bundled []byte) in
 	flags.SetOutput(stderr)
 	path := flags.String("fingerprints", "", "external normalized fingerprint JSON")
 	outputPath := flags.String("output", "", "output path (default stdout)")
+	var validate bool
+	flags.BoolVar(&validate, "validate", false, "strictly validate an external fingerprint file without listing")
+	var technologies stringList
+	flags.Var(&technologies, "technology", "technology name to include (repeatable, case-insensitive)")
+	var channels stringList
+	flags.Var(&channels, "channel", "channel to include: header, script, cookie, html, meta, js, dns_txt, dns_cname, dns_mx (repeatable)")
+	format := flags.String("format", "json", "output format: json or table")
 	if wantsHelp(args) {
 		subcommandUsage(stdout, "technograph fingerprints [flags]", flags,
 			`Lists the exact fingerprint rules used by the scanner without making network
 requests. External normalized databases can be inspected with --fingerprints.
-Use "technograph fingerprints import --help" for the offline Wappalyzer adapter.
 
 Examples:
   technograph fingerprints
-  technograph fingerprints --output fingerprints-report.json
-  technograph fingerprints --fingerprints custom-fingerprints.json`)
+  technograph fingerprints --technology hubspot --format table
+  technograph fingerprints --channel script --channel header
+  technograph fingerprints --fingerprints custom-fingerprints.json
+  technograph fingerprints --fingerprints custom-fingerprints.json --validate
+  technograph fingerprints --output fingerprints-report.json`)
+
 		return 0
 	}
 	if flags.Parse(args) != nil || flags.NArg() != 0 {
 		return 2
+	}
+	if *format != "json" && *format != "table" {
+		fmt.Fprintln(stderr, "technograph: format must be json or table")
+		return 2
+	}
+	if validate {
+		if *path == "" {
+			fmt.Fprintln(stderr, "technograph: --validate requires --fingerprints <file>")
+			return 2
+		}
+		if len(technologies) > 0 || len(channels) > 0 || *format != "json" || *outputPath != "" {
+			fmt.Fprintln(stderr, "technograph: --validate cannot be combined with --technology, --channel, --format table, or --output")
+			return 2
+		}
+		data, _, err := loadFingerprintData(*path, bundled)
+		if err != nil {
+			fmt.Fprintf(stderr, "technograph: %v\n", err)
+			return 1
+		}
+		if _, _, err := fingerprint.Load(data, true); err != nil {
+			fmt.Fprintf(stderr, "technograph: %v\n", err)
+			return 1
+		}
+		return 0
 	}
 	data, strict, err := loadFingerprintData(*path, bundled)
 	if err != nil {
@@ -378,8 +412,16 @@ Examples:
 		fmt.Fprintf(stderr, "technograph: warning: %v\n", warning)
 	}
 	descriptors := database.Descriptors()
+	filtered, err := filterDescriptors(descriptors, technologies, channels)
+	if err != nil {
+		fmt.Fprintf(stderr, "technograph: %v\n", err)
+		return 2
+	}
+	if *format == "table" {
+		return writeBytes(renderFingerprintTable(filtered), *outputPath, stdout, stderr)
+	}
 	return writeValue(agentapi.FingerprintInventory{
-		SchemaVersion: agentapi.SchemaVersion, Count: len(descriptors), Fingerprints: descriptors,
+		SchemaVersion: agentapi.SchemaVersion, Count: len(filtered), Fingerprints: filtered,
 	}, *outputPath, stdout, stderr)
 }
 

@@ -94,7 +94,32 @@ technograph fingerprints import --input webappanalyzer/src/technologies --output
 ```
 
 Validation performs no network access. Fingerprint discovery reports the exact
-embedded rules used by the binary. A local structured CLI invocation may load
+embedded rules used by the binary.
+
+```console
+technograph fingerprints
+technograph fingerprints --technology hubspot --format table
+technograph fingerprints --channel script --channel header
+technograph fingerprints --fingerprints custom.json --validate
+```
+
+`technograph fingerprints` lists the bundled catalog offline via `fingerprint.Load` →
+`Descriptors()` — no network. `--technology` is repeatable case-insensitive
+exact match (union, unknown → empty successful inventory); `--channel` accepts
+only `header|script|cookie|html|meta|js|dns_txt|dns_cname|dns_mx` (union, invalid
+→ exit 2). `--format json` (default) keeps the same `FingerprintInventory`
+shape with the filtered count; `--format table` is a deterministic terminal view
+with tabs/newlines sanitized — JSON values remain unchanged. External files via
+`--fingerprints <file>` are permissively loaded (warnings to stderr). Strict
+`--validate` requires `--fingerprints <file>`, forbids `--technology/--channel/--format table/--output`, uses `fingerprint.Load(strict=true)` — exit 0
+valid no stdout (explicit `--format json` is accepted as the same harmless
+default, still no output), exit 1 invalid, exit 2 usage. Validation proves the file can be
+compiled, not that a technology will be detected live. Filtering is post-load
+(`Load → Descriptors → filters → renderer`) so there is one canonical
+normalization path. The bundled reference at `docs/fingerprints.md` is generated
+from the same path (`make fingerprints-doc`); original `output.json` is unchanged.
+
+A local structured CLI invocation may load
 an external normalized database with `--fingerprints`; the MCP server cannot.
 The offline `fingerprints import` adapter can generate that normalized database
 from native Wappalyzer files, but generated data remains local and is never

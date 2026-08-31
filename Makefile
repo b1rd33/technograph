@@ -1,9 +1,12 @@
-.PHONY: fmt vet test race benchmark build scan release-check snapshot clean
+.PHONY: fmt vet test race benchmark build scan release-check snapshot clean fingerprints-doc
 
 GO_FORMAT_TOOLCHAIN ?= go1.25.7
 
 fmt:
 	GOTOOLCHAIN=$(GO_FORMAT_TOOLCHAIN) go fmt ./...
+
+fingerprints-doc:
+	go run ./internal/fingerprint/cmd/gendoc
 
 vet:
 	go vet ./...
