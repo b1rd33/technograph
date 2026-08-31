@@ -204,7 +204,8 @@ scanner/fingerprint compatibility baselines as CLI `watch`.
 The server uses only embedded fingerprints, enforces a global 20-domain work
 limit, and always enables its autonomous network policy. MCP results reuse the
 same detailed `Report` model as the structured CLI, including
-`http.signals_truncated` and `http.signals_truncated_reasons` for homepage and
+`http.signals_truncated` and `http.signals_truncated_reasons` (MCP output
+schemas advertise the eight allowed enum values) for homepage and
 secondary pages. It accepts bare public
 domains only, resolves targets before dialing, rejects private/loopback/link-
 local/reserved addresses, pins the validated IP for the connection, validates

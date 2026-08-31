@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 
 	"github.com/b1rd33/technograph/internal/agentapi"
@@ -10,6 +11,8 @@ import (
 	"github.com/b1rd33/technograph/internal/buildinfo"
 	"github.com/b1rd33/technograph/internal/domain"
 	"github.com/b1rd33/technograph/internal/history"
+	"github.com/b1rd33/technograph/internal/model"
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/sync/semaphore"
 )
@@ -52,6 +55,35 @@ type DomainHistoryInput struct {
 
 type EmptyInput struct{}
 
+// truncationReasonSchema advertises the exact eight allowed values for
+// signals_truncated_reasons. It is used as a type-level override for
+// model.TruncationReason so that inferred array items carry an enum.
+var truncationReasonSchema = &jsonschema.Schema{
+	Type: "string",
+	Enum: []any{
+		model.ReasonLinks,
+		model.ReasonSignals,
+		model.ReasonInlineScripts,
+		model.ReasonWindowNames,
+		model.ReasonHeaders,
+		model.ReasonCookieCount,
+		model.ReasonCookieBytes,
+		model.ReasonCookieValue,
+	},
+}
+
+func mustSchemaWithTruncationEnum[T any]() *jsonschema.Schema {
+	schema, err := jsonschema.For[T](&jsonschema.ForOptions{
+		TypeSchemas: map[reflect.Type]*jsonschema.Schema{
+			reflect.TypeFor[model.TruncationReason](): truncationReasonSchema,
+		},
+	})
+	if err != nil {
+		panic("mcp truncation enum schema: " + err.Error())
+	}
+	return schema
+}
+
 // New registers the deliberately small read-only tool surface.
 func New(service *app.Service) *Server {
 	return NewWithOptions(service, Options{})
@@ -76,26 +108,38 @@ func NewWithOptions(service *app.Service, options Options) *Server {
 	})
 
 	mcp.AddTool(server.mcp, &mcp.Tool{
-		Name: "scan_domain", Description: "Scan one public domain and return detected technologies, evidence, typed status, and diagnostics.",
+		Name:         "scan_domain",
+		Description:  "Scan one public domain and return detected technologies, evidence, typed status, and diagnostics.",
+		OutputSchema: mustSchemaWithTruncationEnum[agentapi.Report](),
 	}, server.scanDomain)
 	mcp.AddTool(server.mcp, &mcp.Tool{
-		Name: "scan_domains", Description: "Scan up to 20 public domains concurrently and return ordered structured results.",
+		Name:         "scan_domains",
+		Description:  "Scan up to 20 public domains concurrently and return ordered structured results.",
+		OutputSchema: mustSchemaWithTruncationEnum[agentapi.Report](),
 	}, server.scanDomains)
 	mcp.AddTool(server.mcp, &mcp.Tool{
-		Name: "explain_domain", Description: "Scan one public domain and group each detected technology with only its matching evidence; no inferred claims or combined confidence score.",
+		Name:        "explain_domain",
+		Description: "Scan one public domain and group each detected technology with only its matching evidence; no inferred claims or combined confidence score.",
 	}, server.explainDomain)
 	mcp.AddTool(server.mcp, &mcp.Tool{
-		Name: "validate_domain", Description: "Validate and normalize one bare domain without making any network request.",
+		Name:         "validate_domain",
+		Description:  "Validate and normalize one bare domain without making any network request.",
+		OutputSchema: mustSchemaWithTruncationEnum[agentapi.DomainResult](),
 	}, server.validateDomain)
 	mcp.AddTool(server.mcp, &mcp.Tool{
-		Name: "list_fingerprints", Description: "List the embedded technology fingerprints used by this server.",
+		Name:        "list_fingerprints",
+		Description: "List the embedded technology fingerprints used by this server.",
 	}, server.listFingerprints)
 	if server.history != nil {
 		mcp.AddTool(server.mcp, &mcp.Tool{
-			Name: "watch_domain", Description: "Scan one public domain, compare it conservatively with compatible local history, and store the new immutable observation.",
+			Name:         "watch_domain",
+			Description:  "Scan one public domain, compare it conservatively with compatible local history, and store the new immutable observation.",
+			OutputSchema: mustSchemaWithTruncationEnum[history.WatchReport](),
 		}, server.watchDomain)
 		mcp.AddTool(server.mcp, &mcp.Tool{
-			Name: "domain_history", Description: "Read newest immutable local observations for one domain without making network requests.",
+			Name:         "domain_history",
+			Description:  "Read newest immutable local observations for one domain without making network requests.",
+			OutputSchema: mustSchemaWithTruncationEnum[history.Report](),
 		}, server.domainHistory)
 	}
 	return server

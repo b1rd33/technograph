@@ -3,6 +3,7 @@ module github.com/b1rd33/technograph
 go 1.25.0
 
 require (
+	github.com/google/jsonschema-go v0.4.3
 	github.com/miekg/dns v1.1.73
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	golang.org/x/net v0.58.0
@@ -10,7 +11,6 @@ require (
 )
 
 require (
-	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect

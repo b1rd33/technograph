@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — v1.3.1
+
+- MCP output schemas now advertise the exact eight allowed
+  `signals_truncated_reasons` enum values (`links`, `signals`,
+  `inline_scripts`, `window_names`, `headers`, `cookie_count`,
+  `cookie_bytes`, `cookie_value`) on every homepage and secondary-page
+  truncation array — enabling precise agent validation and autocomplete.
+  Runtime JSON, CLI output, and detection remain unchanged.
+
 ## v1.3.0 — 2026-08-31
 
 - Fingerprint transparency: extend `technograph fingerprints` with offline
