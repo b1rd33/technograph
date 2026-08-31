@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — v1.3.0
+## v1.3.0 — 2026-08-31
 
 - Fingerprint transparency: extend `technograph fingerprints` with offline
   inspection filters `--technology` (repeatable, case-insensitive) and
